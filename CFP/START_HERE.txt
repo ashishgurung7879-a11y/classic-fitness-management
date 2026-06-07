@@ -1,0 +1,51 @@
+CLASSIC FITNESS PARK
+NODE.JS + MONGODB START GUIDE
+
+LAST UPDATED: 2026-05-11
+
+ACTIVE STACK
+
+- Frontend: `CFP/frontend`
+- Backend: `CFP/Backend/server.js`
+- Database: MongoDB (`classic_fitness_park`)
+
+QUICK RUN
+
+1. Make sure MongoDB is running locally.
+2. Copy `Backend\.env.example` to `Backend\.env` if needed.
+3. Set a strong `JWT_SECRET` in `Backend\.env`.
+4. Start the backend from `C:\kvt gym`:
+   `cd .\CFP\Backend`
+   `npm install`
+   `npm start`
+5. Open:
+   `http://localhost:5000`
+
+IMPORTANT
+
+- The Node backend serves both the API and the frontend pages.
+- The frontend expects the API at `http://localhost:5000/api` during local development.
+
+MAIN PAGES
+
+- `http://localhost:5000/`
+- `http://localhost:5000/member.html`
+- `http://localhost:5000/trainer.html`
+- `http://localhost:5000/admin.html`
+- `http://localhost:5000/payment.html`
+
+IF MONGODB IS NOT RUNNING
+
+1. Open `services.msc`
+2. Start `MongoDB Server`
+
+Or start it from a terminal if your install supports that.
+
+SEED / DEFAULT DATA
+
+- Use `cd .\CFP\Backend` then `npm run seed`
+- Configure the seed passwords in `Backend\.env` first
+
+LEGACY NOTE
+
+- Use the Node backend in `Backend\` for the current working stack.

@@ -1,0 +1,19 @@
+
+══════════════════════════════════════
+🏋️  CLASSIC FITNESS PARK v3.0
+📍 Kakarvitta, Jhapa, Nepal
+🚀 http://localhost:5000/api
+💚 http://localhost:5000/api/health
+══════════════════════════════════════
+
+✅ MongoDB Connected: mongodb://localhost:27017/classic_fitness_park
+✅ User indexes synced
+GET /about
+GET /classes
+GET /membership
+GET /trainers
+GET /shop
+GET /contact
+GET /member
+GET /payment
+GET /api/health

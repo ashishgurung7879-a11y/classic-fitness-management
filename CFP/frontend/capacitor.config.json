@@ -1,0 +1,9 @@
+{
+  "appId": "com.classicfitnesspark.app",
+  "appName": "Classic Fitness Park",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}

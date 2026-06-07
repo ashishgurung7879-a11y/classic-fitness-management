@@ -1,0 +1,19 @@
+{
+  "name": "classic-fitness-park",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "Backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "start": "npm run start --workspace Backend",
+    "start:full": "npm run build && npm run start --workspace Backend",
+    "dev:api": "npm run dev --workspace Backend",
+    "dev:web": "npm --prefix frontend run dev"
+  }
+}
