@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import SiteMeta from '../components/SiteMeta';
 import PasswordInput from '../components/PasswordInput';
 import useViewportMatch from '../hooks/useViewportMatch';
-import { clearSession, setSession, trainerApi } from '../utils/api';
+import { clearSession, publicApi, setSession, trainerApi } from '../utils/api';
 import { useToast } from '../context/ToastContext';
 
 const tabs = [
@@ -37,6 +37,21 @@ const specialityOptions = [
   'General Fitness',
 ];
 
+const defaultTrainerLoginForm = { identifier: '', password: '' };
+const defaultTrainerRegisterForm = {
+  firstName: '',
+  lastName: '',
+  phone: '',
+  email: '',
+  password: '',
+  experience: '1',
+  specialities: ['Strength Training'],
+  certifications: '',
+  bio: '',
+};
+const defaultTrainerForgotForm = { contact: '', otp: '', newPassword: '', confirmPassword: '' };
+const defaultTrainerProfileForm = { firstName: '', lastName: '', phone: '', bio: '', certifications: '' };
+
 function noticeTag(value) {
   const cleaned = String(value || '').trim().replace(/[^a-z0-9 ]/gi, '').toUpperCase();
   return cleaned ? cleaned.slice(0, 10) : 'NEWS';
@@ -63,20 +78,12 @@ export default function TrainerPortal() {
   const [schedule, setSchedule] = useState([]);
   const [members, setMembers] = useState([]);
   const [notices, setNotices] = useState([]);
-  const [loginForm, setLoginForm] = useState({ identifier: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({
-    firstName: '',
-    lastName: '',
-    phone: '',
-    email: '',
-    password: '',
-    experience: '1',
-    specialities: ['Strength Training'],
-    certifications: '',
-    bio: '',
-  });
-  const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', phone: '', bio: '', certifications: '' });
+  const [loginForm, setLoginForm] = useState(defaultTrainerLoginForm);
+  const [registerForm, setRegisterForm] = useState(defaultTrainerRegisterForm);
+  const [forgotForm, setForgotForm] = useState(defaultTrainerForgotForm);
+  const [profileForm, setProfileForm] = useState(defaultTrainerProfileForm);
   const [slotForm, setSlotForm] = useState({ dayOfWeek: '1', startTime: '06:00', endTime: '08:00', maxBookings: '3' });
+  const [resetCodeSent, setResetCodeSent] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem('cfp_trainer_token')) {
@@ -88,6 +95,7 @@ export default function TrainerPortal() {
     const me = await trainerApi('/auth/me');
     if (!me.ok || me.data.user?.role !== 'trainer') {
       clearSession('trainer');
+      clearTrainerDashboardState();
       setView('auth');
       return;
     }
@@ -125,16 +133,40 @@ export default function TrainerPortal() {
     if (ok) setSchedule(data.schedule || []);
   }
 
+  function clearTrainerDashboardState() {
+    setTrainer(null);
+    setBookings([]);
+    setSchedule([]);
+    setMembers([]);
+    setNotices([]);
+    setProfileForm(defaultTrainerProfileForm);
+    setTab('overview');
+  }
+
+  function switchAuthTab(nextTab) {
+    setAuthTab(nextTab);
+    setLoginForm(defaultTrainerLoginForm);
+    setRegisterForm(defaultTrainerRegisterForm);
+    setForgotForm(defaultTrainerForgotForm);
+    setResetCodeSent(false);
+    clearTrainerDashboardState();
+  }
+
   async function handleLogin() {
-    if (!loginForm.identifier || !loginForm.password) {
+    const identifier = loginForm.identifier.trim();
+    const password = loginForm.password;
+
+    if (!identifier || !password) {
       showToast('Enter your trainer phone or email and password.');
       return;
     }
 
+    clearSession('trainer');
+    clearTrainerDashboardState();
     setBusy(true);
-    const { ok, data } = await trainerApi('/auth/login', {
+    const { ok, data } = await publicApi('/auth/login', {
       method: 'POST',
-      body: { identifier: loginForm.identifier, password: loginForm.password },
+      body: { identifier, password },
     });
     setBusy(false);
 
@@ -150,6 +182,7 @@ export default function TrainerPortal() {
 
     setSession('trainer', data.token, data.user);
     setTrainer(data.user);
+    setLoginForm(defaultTrainerLoginForm);
     setProfileForm({
       firstName: data.user.firstName || '',
       lastName: data.user.lastName || '',
@@ -169,13 +202,13 @@ export default function TrainerPortal() {
     }
 
     setBusy(true);
-    const { ok, data } = await trainerApi('/auth/register', {
+    const { ok, data } = await publicApi('/auth/register', {
       method: 'POST',
       body: {
         firstName: registerForm.firstName,
         lastName: registerForm.lastName,
         phone: registerForm.phone,
-      email: registerForm.email,
+        email: registerForm.email,
         password: registerForm.password,
         role: 'trainer',
         trainerApplication: {
@@ -193,28 +226,83 @@ export default function TrainerPortal() {
       return;
     }
 
-    setRegisterForm({
-      firstName: '',
-      lastName: '',
-      phone: '',
-      email: '',
-      password: '',
-      experience: '1',
-      specialities: ['Strength Training'],
-      certifications: '',
-      bio: '',
-    });
+    setRegisterForm(defaultTrainerRegisterForm);
+    setLoginForm(defaultTrainerLoginForm);
     setAuthTab('login');
     showToast(data.message || 'Application submitted.');
   }
 
+  async function handleForgotPasswordRequest() {
+    if (!forgotForm.contact) {
+      showToast('Enter trainer phone number or email first.');
+      return;
+    }
+
+    setBusy(true);
+    const { ok, data } = await publicApi('/auth/forgot-password', {
+      method: 'POST',
+      body: { contact: forgotForm.contact },
+    });
+    setBusy(false);
+
+    if (!ok) {
+      showToast(data.message || 'Could not send reset code.');
+      return;
+    }
+
+    setResetCodeSent(true);
+    setForgotForm((current) => ({
+      ...current,
+      otp: data.developmentOtp || current.otp,
+    }));
+    showToast(data.message || 'Reset code sent.');
+  }
+
+  async function handleResetPassword() {
+    if (!forgotForm.contact || !forgotForm.otp || !forgotForm.newPassword) {
+      showToast('Fill in contact, reset code, and new password.');
+      return;
+    }
+
+    if (forgotForm.newPassword.length < 6) {
+      showToast('New password must be at least 6 characters.');
+      return;
+    }
+
+    if (forgotForm.newPassword !== forgotForm.confirmPassword) {
+      showToast('New password and confirm password do not match.');
+      return;
+    }
+
+    setBusy(true);
+    const { ok, data } = await publicApi('/auth/reset-password', {
+      method: 'POST',
+      body: {
+        contact: forgotForm.contact,
+        otp: forgotForm.otp,
+        newPassword: forgotForm.newPassword,
+      },
+    });
+    setBusy(false);
+
+    if (!ok) {
+      showToast(data.message || 'Could not reset password.');
+      return;
+    }
+
+    setForgotForm(defaultTrainerForgotForm);
+    setResetCodeSent(false);
+    setAuthTab('login');
+    showToast(data.message || 'Password reset successfully.');
+  }
+
   function logout() {
     clearSession('trainer');
-    setTrainer(null);
-    setBookings([]);
-    setSchedule([]);
-    setMembers([]);
-    setNotices([]);
+    clearTrainerDashboardState();
+    setLoginForm(defaultTrainerLoginForm);
+    setRegisterForm(defaultTrainerRegisterForm);
+    setForgotForm(defaultTrainerForgotForm);
+    setResetCodeSent(false);
     setView('auth');
   }
 
@@ -295,16 +383,40 @@ export default function TrainerPortal() {
             <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0, lineHeight: 1.5 }}>Application, schedule and coaching dashboard.</p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
-            <button type="button" className={authTab === 'login' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => setAuthTab('login')}>Login</button>
-            <button type="button" className={authTab === 'register' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => setAuthTab('register')}>Apply as Trainer</button>
+          <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
+            <button type="button" className={authTab === 'login' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => switchAuthTab('login')}>Login</button>
+            <button type="button" className={authTab === 'register' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => switchAuthTab('register')}>Apply</button>
+            <button type="button" className={authTab === 'forgot' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => switchAuthTab('forgot')}>Reset</button>
           </div>
 
           {authTab === 'login' ? (
             <div style={{ display: 'grid', gap: '0.85rem' }}>
-              <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Phone or email</div><input className="inp" value={loginForm.identifier} onChange={(event) => setLoginForm((current) => ({ ...current, identifier: event.target.value }))} placeholder="9800000000 or trainer@example.com" /></label>
-              <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Password</div><PasswordInput className="inp" value={loginForm.password} onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))} autoComplete="current-password" /></label>
+              <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Phone or email</div><input className="inp" value={loginForm.identifier} onChange={(event) => setLoginForm((current) => ({ ...current, identifier: event.target.value }))} placeholder="9800000000 or trainer@example.com" autoComplete="off" /></label>
+              <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Password</div><PasswordInput className="inp" value={loginForm.password} onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))} autoComplete="off" /></label>
               <button type="button" className="btn-red btn-full" disabled={busy} onClick={handleLogin}>{busy ? 'Signing In...' : 'Login as Trainer'}</button>
+              <button
+                type="button"
+                className="btn-outline btn-full"
+                onClick={() => {
+                  setAuthTab('forgot');
+                  setForgotForm((current) => ({ ...current, contact: loginForm.identifier || current.contact }));
+                }}
+              >
+                Forgot Password
+              </button>
+            </div>
+          ) : authTab === 'forgot' ? (
+            <div style={{ display: 'grid', gap: '0.85rem' }}>
+              <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Phone or email</div><input className="inp" value={forgotForm.contact} onChange={(event) => setForgotForm((current) => ({ ...current, contact: event.target.value }))} placeholder="9800000000 or trainer@example.com" autoComplete="off" /></label>
+              <button type="button" className="btn-red btn-full" disabled={busy} onClick={handleForgotPasswordRequest}>
+                {busy ? 'Sending Code...' : resetCodeSent ? 'Resend Reset Code' : 'Send Reset Code'}
+              </button>
+              <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Reset code</div><input className="inp" value={forgotForm.otp} onChange={(event) => setForgotForm((current) => ({ ...current, otp: event.target.value }))} placeholder="6-digit code" autoComplete="one-time-code" /></label>
+              <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>New password</div><PasswordInput className="inp" value={forgotForm.newPassword} onChange={(event) => setForgotForm((current) => ({ ...current, newPassword: event.target.value }))} autoComplete="new-password" /></label>
+              <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Confirm new password</div><PasswordInput className="inp" value={forgotForm.confirmPassword} onChange={(event) => setForgotForm((current) => ({ ...current, confirmPassword: event.target.value }))} autoComplete="new-password" /></label>
+              <button type="button" className="btn-red btn-full" disabled={busy} onClick={handleResetPassword}>
+                {busy ? 'Resetting Password...' : 'Reset Password'}
+              </button>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: '0.9rem' }}>

@@ -126,6 +126,22 @@ const TrainerScheduleSchema = new mongoose.Schema({
   maxSlots:    { type: Number, default: 5 }
 });
 
+const MeasurementSchema = new mongoose.Schema({
+  member:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  trainer:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  measuredAt: { type: Date, required: true, default: Date.now, index: true },
+  height:     { type: Number, min: 0 },
+  weight:     { type: Number, min: 0 },
+  forearms:   { type: Number, min: 0 },
+  biceps:     { type: Number, min: 0 },
+  chest:      { type: Number, min: 0 },
+  abdomen:    { type: Number, min: 0 },
+  thighs:     { type: Number, min: 0 },
+  calves:     { type: Number, min: 0 },
+  notes:      { type: String, trim: true, default: '' },
+  recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
+
 const ContactLeadSchema = new mongoose.Schema({
   name:      { type: String, required: true, trim: true },
   phone:     { type: String, trim: true, default: '' },
@@ -148,5 +164,6 @@ module.exports = {
   Gallery:         mongoose.model('Gallery',         GallerySchema),
   Notice:          mongoose.model('Notice',          NoticeSchema),
   ContactLead:     mongoose.model('ContactLead',     ContactLeadSchema),
+  Measurement:     mongoose.model('Measurement',     MeasurementSchema),
   TrainerSchedule: mongoose.model('TrainerSchedule', TrainerScheduleSchema),
 };

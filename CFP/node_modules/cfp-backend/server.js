@@ -130,6 +130,7 @@ const noticesRouter = require('./routes/notices');
 const notificationsRouter = require('./routes/notifications');
 const dashboardRouter = require('./routes/dashboard');
 const paymentSettingsRouter = require('./routes/paymentSettings');
+const measurementsRouter = require('./routes/measurements');
 const { attendanceRouter } = require('./routes/attendance');
 
 app.use('/api/auth', authRouter);
@@ -147,6 +148,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/notices', noticesRouter);
 app.use('/api/payment-settings', paymentSettingsRouter);
+app.use('/api/measurements', measurementsRouter);
 
 // ── HEALTH CHECK ─────────────────────────────
 app.get('/api/health', (req, res) => {

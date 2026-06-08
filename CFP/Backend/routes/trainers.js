@@ -225,6 +225,9 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
     if (!firstName || !normalizedPhone || !password) {
       return res.status(400).json({ success: false, message: 'First name, phone, and password are required' });
     }
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
 
     const duplicateChecks = [{ phone: normalizedPhone }];
     if (normalizedEmail) duplicateChecks.push({ email: normalizedEmail });
@@ -299,8 +302,8 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
       if (!normalizedPhone) {
         return res.status(400).json({ success: false, message: 'Phone is required' });
       }
-      const existingPhoneUser = await User.findOne({ phone: normalizedPhone, _id: { $ne: req.params.id } }).select('_id');
-      if (existingPhoneUser) {
+      const existingPhoneUser = await User.findOne({ phone: normalizedPhone }).select('_id');
+      if (existingPhoneUser && String(existingPhoneUser._id) !== String(req.params.id)) {
         return res.status(400).json({ success: false, message: 'Phone already registered' });
       }
       trainer.phone = normalizedPhone;
@@ -309,13 +312,25 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
     if (req.body.email !== undefined) {
       const normalizedEmail = normalizeOptionalEmail(req.body.email);
       if (normalizedEmail) {
-        const existingEmailUser = await User.findOne({ email: normalizedEmail, _id: { $ne: req.params.id } }).select('_id');
-        if (existingEmailUser) {
+        const existingEmailUser = await User.findOne({ email: normalizedEmail }).select('_id');
+        if (existingEmailUser && String(existingEmailUser._id) !== String(req.params.id)) {
           return res.status(400).json({ success: false, message: 'Email already registered' });
         }
         trainer.email = normalizedEmail;
       } else {
         trainer.email = undefined;
+      }
+    }
+
+    if (req.body.password !== undefined) {
+      const password = String(req.body.password || '');
+      if (password) {
+        if (password.length < 6) {
+          return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+        }
+        trainer.password = password;
+        trainer.twoFactorCode = '';
+        trainer.twoFactorExpiresAt = null;
       }
     }
 

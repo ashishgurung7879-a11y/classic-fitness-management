@@ -16,6 +16,16 @@ function parseMoney(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizePassword(value) {
+  return typeof value === 'string' ? value : '';
+}
+
+function validatePhotoInput(photo) {
+  if (photo === undefined || photo === null || photo === '') return '';
+  const photoValue = String(photo);
+  return photoValue.length <= 2 * 1024 * 1024 ? photoValue : null;
+}
+
 function buildMembershipInput(body = {}, existingMembership = {}) {
   const membershipBody = body.membership && typeof body.membership === 'object' ? body.membership : body;
   const membership = { ...existingMembership };
@@ -55,13 +65,21 @@ function buildMembershipInput(body = {}, existingMembership = {}) {
 
 router.post('/', protect, authorize('admin'), async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password, plan, startDate, endDate, shift, dueAmount, paidAmount } = req.body;
+    const { firstName, lastName, email, phone, password, photo, plan, startDate, endDate, shift, dueAmount, paidAmount } = req.body;
     const normalizedEmail = normalizeOptionalEmail(email);
     const normalizedPhone = normalizePhone(phone);
+    const memberPassword = normalizePassword(password);
+    const photoInput = validatePhotoInput(photo);
     
     // Validation
-    if (!firstName || !normalizedPhone || !password) {
+    if (!firstName || !normalizedPhone || !memberPassword) {
       return res.status(400).json({ success: false, message: 'First name, phone, and password are required' });
+    }
+    if (memberPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+    if (photoInput === null) {
+      return res.status(400).json({ success: false, message: 'Photo too large. Max 2MB.' });
     }
 
     // Check if email or phone already exists
@@ -81,7 +99,8 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
       lastName: lastName || '',
       email: normalizedEmail,
       phone: normalizedPhone,
-      password,
+      password: memberPassword,
+      photo: photoInput,
       role: 'member',
       approvalStatus: 'approved',
       isActive: true,
@@ -106,6 +125,7 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
         lastName: newMember.lastName,
         email: newMember.email,
         phone: newMember.phone,
+        photo: newMember.photo,
         membership: newMember.membership
       }
     });
@@ -213,11 +233,17 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
       return res.status(404).json({ success: false, message: 'Member not found' });
     }
 
-    const allowedTopLevelFields = ['firstName', 'lastName', 'gender', 'dateOfBirth', 'address', 'isActive', 'approvalStatus'];
+    const allowedTopLevelFields = ['firstName', 'lastName', 'photo', 'gender', 'dateOfBirth', 'address', 'isActive', 'approvalStatus'];
     for (const field of allowedTopLevelFields) {
       if (req.body[field] !== undefined) {
         if (field === 'dateOfBirth') {
           member.dateOfBirth = parseOptionalDate(req.body[field]);
+        } else if (field === 'photo') {
+          const photoInput = validatePhotoInput(req.body[field]);
+          if (photoInput === null) {
+            return res.status(400).json({ success: false, message: 'Photo too large. Max 2MB.' });
+          }
+          member.photo = photoInput;
         } else {
           member[field] = req.body[field];
         }
@@ -229,8 +255,8 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
       if (!normalizedPhone) {
         return res.status(400).json({ success: false, message: 'Phone is required' });
       }
-      const existingPhoneUser = await User.findOne({ phone: normalizedPhone, _id: { $ne: req.params.id } }).select('_id');
-      if (existingPhoneUser) {
+      const existingPhoneUser = await User.findOne({ phone: normalizedPhone }).select('_id');
+      if (existingPhoneUser && String(existingPhoneUser._id) !== String(req.params.id)) {
         return res.status(400).json({ success: false, message: 'Phone already registered' });
       }
       member.phone = normalizedPhone;
@@ -239,13 +265,23 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
     if (req.body.email !== undefined) {
       const normalizedEmail = normalizeOptionalEmail(req.body.email);
       if (normalizedEmail) {
-        const existingEmailUser = await User.findOne({ email: normalizedEmail, _id: { $ne: req.params.id } }).select('_id');
-        if (existingEmailUser) {
+        const existingEmailUser = await User.findOne({ email: normalizedEmail }).select('_id');
+        if (existingEmailUser && String(existingEmailUser._id) !== String(req.params.id)) {
           return res.status(400).json({ success: false, message: 'Email already registered' });
         }
         member.email = normalizedEmail;
       } else {
         member.email = undefined;
+      }
+    }
+
+    if (req.body.password !== undefined) {
+      const memberPassword = normalizePassword(req.body.password);
+      if (memberPassword) {
+        if (memberPassword.length < 6) {
+          return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+        }
+        member.password = memberPassword;
       }
     }
 

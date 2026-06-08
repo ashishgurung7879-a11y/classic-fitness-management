@@ -19,7 +19,7 @@ export default function FloatingActions() {
   return (
     <>
       <a
-        href="https://wa.me/9779863707701"
+        href="https://wa.me/+9779825933443"
         className="float-wa"
         target="_blank"
         rel="noreferrer"

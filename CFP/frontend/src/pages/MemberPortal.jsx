@@ -3,7 +3,7 @@ import SiteMeta from '../components/SiteMeta';
 import PasswordInput from '../components/PasswordInput';
 import useViewportMatch from '../hooks/useViewportMatch';
 import { useNavigate } from 'react-router-dom';
-import { clearSession, memberApi, setSession } from '../utils/api';
+import { clearSession, fileToDataUrl, memberApi, publicApi, setSession } from '../utils/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -36,6 +36,12 @@ const badgeStyles = {
   expired: { background: 'rgba(231, 76, 60, 0.14)', color: '#b62d1f' },
 };
 
+const defaultLoginForm = { identifier: '', password: '', twoFactorCode: '' };
+const defaultRegisterForm = { firstName: '', lastName: '', phone: '', email: '', password: '' };
+const defaultForgotForm = { contact: '', otp: '', newPassword: '', confirmPassword: '' };
+const defaultProfileForm = { firstName: '', lastName: '', phone: '', address: '', goal: '', photo: '' };
+const defaultPasswordForm = { currentPassword: '', newPassword: '' };
+
 function formatDate(value, withTime = false) {
   if (!value) return '—';
   const date = new Date(value);
@@ -60,14 +66,15 @@ export default function MemberPortal() {
   const [busy, setBusy] = useState(false);
   const [dashboard, setDashboard] = useState(null);
   const [notifications, setNotifications] = useState([]);
-  const [loginForm, setLoginForm] = useState({ identifier: '', password: '', twoFactorCode: '' });
-  const [registerForm, setRegisterForm] = useState({ firstName: '', lastName: '', phone: '', email: '', password: '' });
-  const [forgotForm, setForgotForm] = useState({ contact: '', otp: '', newPassword: '', confirmPassword: '' });
-  const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', phone: '', address: '', goal: '' });
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
+  const [loginForm, setLoginForm] = useState(defaultLoginForm);
+  const [registerForm, setRegisterForm] = useState(defaultRegisterForm);
+  const [forgotForm, setForgotForm] = useState(defaultForgotForm);
+  const [profileForm, setProfileForm] = useState(defaultProfileForm);
+  const [passwordForm, setPasswordForm] = useState(defaultPasswordForm);
   const [workoutCalories, setWorkoutCalories] = useState('150');
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
   const [resetCodeSent, setResetCodeSent] = useState(false);
+  const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem('cfp_token')) {
@@ -84,6 +91,7 @@ export default function MemberPortal() {
     if (!ok || !data.dashboard?.user) {
       clearSession('member');
       syncLogout();
+      clearMemberState();
       setView('auth');
       return;
     }
@@ -97,22 +105,50 @@ export default function MemberPortal() {
       phone: nextDashboard.user.phone || '',
       address: nextDashboard.user.address || '',
       goal: nextDashboard.user.fitnessData?.goal || '',
+      photo: nextDashboard.user.photo || '',
     });
     setView('dashboard');
   }
 
+  function clearMemberState() {
+    setDashboard(null);
+    setNotifications([]);
+    setProfileForm(defaultProfileForm);
+    setPasswordForm(defaultPasswordForm);
+    setWorkoutCalories('150');
+    setNeedsTwoFactor(false);
+    setResetCodeSent(false);
+    setActiveTab('overview');
+  }
+
+  function switchAuthTab(nextTab) {
+    setAuthTab(nextTab);
+    setNeedsTwoFactor(false);
+    setResetCodeSent(false);
+    setLoginForm(defaultLoginForm);
+    setRegisterForm(defaultRegisterForm);
+    setForgotForm(defaultForgotForm);
+    clearMemberState();
+  }
+
   async function handleLogin() {
-    if (!loginForm.identifier || !loginForm.password) {
+    const identifier = loginForm.identifier.trim();
+    const password = loginForm.password;
+
+    if (!identifier || !password) {
       showToast('Enter your phone or email and password.');
       return;
     }
 
+    clearSession('member');
+    syncLogout();
+    clearMemberState();
     setBusy(true);
-    const { ok, data } = await memberApi('/auth/login', {
+    const { ok, data } = await publicApi('/auth/login', {
       method: 'POST',
       body: {
-        identifier: loginForm.identifier,
-        password: loginForm.password,
+        identifier,
+        password,
         twoFactorCode: loginForm.twoFactorCode,
       },
     });
@@ -137,7 +173,7 @@ export default function MemberPortal() {
     setSession('member', data.token, data.user);
     syncLogin(data.user, data.token);
     setNeedsTwoFactor(false);
-    setLoginForm({ identifier: '', password: '', twoFactorCode: '' });
+    setLoginForm(defaultLoginForm);
     await loadDashboard();
     showToast(`Welcome back, ${data.user.firstName}.`);
   }
@@ -149,7 +185,7 @@ export default function MemberPortal() {
     }
 
     setBusy(true);
-    const { ok, data } = await memberApi('/auth/register', {
+    const { ok, data } = await publicApi('/auth/register', {
       method: 'POST',
       body: { ...registerForm, role: 'member' },
     });
@@ -160,7 +196,8 @@ export default function MemberPortal() {
       return;
     }
 
-    setRegisterForm({ firstName: '', lastName: '', phone: '', email: '', password: '' });
+    setRegisterForm(defaultRegisterForm);
+    setLoginForm(defaultLoginForm);
     setAuthTab('login');
     showToast(data.message || 'Registration submitted.');
   }
@@ -172,7 +209,7 @@ export default function MemberPortal() {
     }
 
     setBusy(true);
-    const { ok, data } = await memberApi('/auth/forgot-password', {
+    const { ok, data } = await publicApi('/auth/forgot-password', {
       method: 'POST',
       body: { contact: forgotForm.contact },
     });
@@ -208,7 +245,7 @@ export default function MemberPortal() {
     }
 
     setBusy(true);
-    const { ok, data } = await memberApi('/auth/reset-password', {
+    const { ok, data } = await publicApi('/auth/reset-password', {
       method: 'POST',
       body: {
         contact: forgotForm.contact,
@@ -223,7 +260,7 @@ export default function MemberPortal() {
       return;
     }
 
-    setForgotForm({ contact: '', otp: '', newPassword: '', confirmPassword: '' });
+    setForgotForm(defaultForgotForm);
     setResetCodeSent(false);
     setNeedsTwoFactor(false);
     setAuthTab('login');
@@ -239,6 +276,7 @@ export default function MemberPortal() {
         lastName: profileForm.lastName,
         phone: profileForm.phone,
         address: profileForm.address,
+        photo: profileForm.photo,
         fitnessData: { goal: profileForm.goal },
       },
     });
@@ -256,6 +294,33 @@ export default function MemberPortal() {
     }
 
     showToast('Profile updated.');
+  }
+
+  async function handleProfilePhotoChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please choose an image file.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Choose a profile photo under 2 MB.');
+      return;
+    }
+
+    setProfilePhotoUploading(true);
+    try {
+      const photo = await fileToDataUrl(file);
+      setProfileForm((current) => ({ ...current, photo }));
+      showToast(`${file.name} is ready to save.`);
+    } catch (error) {
+      showToast(error.message || 'Could not read the selected photo.');
+    } finally {
+      setProfilePhotoUploading(false);
+      event.target.value = '';
+    }
   }
 
   async function handlePasswordChange(event) {
@@ -306,8 +371,10 @@ export default function MemberPortal() {
   function handleLogout() {
     clearSession('member');
     syncLogout();
-    setDashboard(null);
-    setNotifications([]);
+    clearMemberState();
+    setLoginForm(defaultLoginForm);
+    setRegisterForm(defaultRegisterForm);
+    setForgotForm(defaultForgotForm);
     setView('auth');
     navigate('/');
   }
@@ -329,16 +396,16 @@ export default function MemberPortal() {
 
           <div style={{ ...cardStyle, borderRadius: isPhone ? '16px' : cardStyle.borderRadius, padding: isPhone ? '0.65rem' : '0.5rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
-              <button type="button" className={authTab === 'login' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => setAuthTab('login')}>Login</button>
-              <button type="button" className={authTab === 'register' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => setAuthTab('register')}>Register</button>
-              <button type="button" className={authTab === 'forgot' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => setAuthTab('forgot')}>Reset</button>
+              <button type="button" className={authTab === 'login' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => switchAuthTab('login')}>Login</button>
+              <button type="button" className={authTab === 'register' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => switchAuthTab('register')}>Register</button>
+              <button type="button" className={authTab === 'forgot' ? 'btn-red btn-full' : 'btn-outline btn-full'} onClick={() => switchAuthTab('forgot')}>Reset</button>
             </div>
 
             {authTab === 'login' ? (
               <div style={{ display: 'grid', gap: '0.85rem' }}>
                 <label>
                   <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: '#666' }}>Phone or email</div>
-                  <input className="inp" value={loginForm.identifier} onChange={(event) => setLoginForm((current) => ({ ...current, identifier: event.target.value }))} placeholder="98XXXXXXXX or email@example.com" />
+                  <input className="inp" value={loginForm.identifier} onChange={(event) => setLoginForm((current) => ({ ...current, identifier: event.target.value }))} placeholder="98XXXXXXXX or email@example.com" autoComplete="off" />
                 </label>
                 <label>
                   <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: '#666' }}>Password</div>
@@ -346,7 +413,7 @@ export default function MemberPortal() {
                     className="inp"
                     value={loginForm.password}
                     onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
-                    autoComplete="current-password"
+                    autoComplete="off"
                   />
                 </label>
                 {needsTwoFactor && (
@@ -476,7 +543,7 @@ export default function MemberPortal() {
       <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(255,255,255,0.92)', borderBottom: '1px solid rgba(0,0,0,0.08)', backdropFilter: 'blur(10px)' }}>
         <div style={{ maxWidth: '1180px', margin: '0 auto', padding: isPhone ? '0.8rem 0.85rem' : '0.9rem 1.25rem', display: isPhone ? 'grid' : 'flex', gridTemplateColumns: '1fr', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
-            <img src="/logo.jpg" alt="CFP" style={{ width: isPhone ? '42px' : '46px', height: isPhone ? '42px' : '46px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #cc0000', flexShrink: 0 }} />
+            <img src={user.photo || '/logo.jpg'} alt="CFP" style={{ width: isPhone ? '42px' : '46px', height: isPhone ? '42px' : '46px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #cc0000', flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: isPhone ? '1.35rem' : '1.8rem', lineHeight: 1, overflowWrap: 'anywhere', letterSpacing: 0 }}>Classic Fitness Park</div>
               <div style={{ color: '#666', fontSize: '0.82rem' }}>Welcome, {user.firstName || 'Member'}</div>
@@ -686,6 +753,27 @@ export default function MemberPortal() {
             <form style={cardStyle} onSubmit={handleProfileSave}>
               <h2 style={{ marginTop: 0 }}>Update profile</h2>
               <div style={{ display: 'grid', gap: '0.85rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '96px 1fr', gap: '0.85rem', alignItems: 'center' }}>
+                  <div style={{ width: '96px', height: '96px', borderRadius: '50%', overflow: 'hidden', border: '3px solid #cc0000', background: '#f3f3f5', display: 'grid', placeItems: 'center', color: '#777', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+                    {profileForm.photo ? (
+                      <img src={profileForm.photo} alt="Profile preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span>No photo</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gap: '0.55rem' }}>
+                    <label className="btn-outline btn-full" style={{ cursor: 'pointer', textAlign: 'center' }}>
+                      <input type="file" accept="image/*" onChange={handleProfilePhotoChange} style={{ display: 'none' }} />
+                      {profilePhotoUploading ? 'Reading Photo...' : 'Choose Profile Picture'}
+                    </label>
+                    {profileForm.photo ? (
+                      <button type="button" className="btn-outline btn-full" onClick={() => setProfileForm((current) => ({ ...current, photo: '' }))}>
+                        Remove Profile Picture
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: '0.85rem' }}>
                   <label>
                     <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: '#666' }}>First name</div>

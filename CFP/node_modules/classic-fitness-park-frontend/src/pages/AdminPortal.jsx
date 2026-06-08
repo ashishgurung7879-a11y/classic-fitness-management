@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 const tabs = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'members', label: 'Members' },
+  { id: 'measurements', label: 'Measurement Chart' },
   { id: 'memberApps', label: 'Member Applications' },
   { id: 'trainerApps', label: 'Trainer Applications' },
   { id: 'products', label: 'Products' },
@@ -62,6 +63,48 @@ const defaultPaymentMethods = {
   },
 };
 
+const measurementFields = [
+  { key: 'height', label: 'Height', unit: 'cm', required: true },
+  { key: 'weight', label: 'Weight', unit: 'kg', required: true },
+  { key: 'forearms', label: 'Forearms', unit: 'cm', optional: true },
+  { key: 'biceps', label: 'Biceps', unit: 'cm' },
+  { key: 'chest', label: 'Chest', unit: 'cm' },
+  { key: 'abdomen', label: 'Abdomen', unit: 'cm' },
+  { key: 'thighs', label: 'Thighs', unit: 'cm' },
+  { key: 'calves', label: 'Calves', unit: 'cm' },
+];
+
+function createDefaultMeasurementForm() {
+  return {
+    id: '',
+    measuredAt: formatDateInput(new Date()),
+    trainer: '',
+    height: '',
+    weight: '',
+    forearms: '',
+    biceps: '',
+    chest: '',
+    abdomen: '',
+    thighs: '',
+    calves: '',
+    notes: '',
+  };
+}
+
+function mapMeasurementToForm(record) {
+  const form = createDefaultMeasurementForm();
+  form.id = record?._id || '';
+  form.measuredAt = formatDateInput(record?.measuredAt);
+  form.trainer = record?.trainer?._id || record?.trainer || '';
+  form.notes = record?.notes || '';
+  measurementFields.forEach((field) => {
+    form[field.key] = record?.[field.key] === undefined || record?.[field.key] === null
+      ? ''
+      : String(record[field.key]);
+  });
+  return form;
+}
+
 function formatDate(value, withTime = false) {
   if (!value) return 'Not set';
   const date = new Date(value);
@@ -80,6 +123,19 @@ function money(value) {
   return `Rs. ${Number(value || 0).toLocaleString()}`;
 }
 
+function measurementValue(record, field) {
+  const value = Number(record?.[field.key]);
+  if (!Number.isFinite(value) || value <= 0) return 'Not set';
+  return `${value.toLocaleString()} ${field.unit}`;
+}
+
+function measurementDelta(current, previous, field) {
+  const currentValue = Number(current?.[field.key]);
+  const previousValue = Number(previous?.[field.key]);
+  if (!Number.isFinite(currentValue) || !Number.isFinite(previousValue)) return null;
+  return currentValue - previousValue;
+}
+
 function fullName(person) {
   return [person?.firstName, person?.lastName].filter(Boolean).join(' ').trim() || 'Unnamed member';
 }
@@ -95,6 +151,7 @@ function createDefaultMemberForm() {
     email: '',
     phone: '',
     password: '',
+    photo: '',
     gender: 'male',
     dateOfBirth: '',
     address: '',
@@ -117,6 +174,7 @@ function mapMemberToForm(member) {
     email: member?.email || '',
     phone: member?.phone || '',
     password: '',
+    photo: member?.photo || '',
     gender: member?.gender || 'male',
     dateOfBirth: formatDateInput(member?.dateOfBirth),
     address: member?.address || '',
@@ -138,6 +196,7 @@ function buildMemberPayload(form, mode) {
     lastName: form.lastName.trim(),
     email: form.email.trim(),
     phone: form.phone.trim(),
+    photo: form.photo || '',
     gender: form.gender,
     dateOfBirth: form.dateOfBirth || '',
     address: form.address.trim(),
@@ -153,6 +212,8 @@ function buildMemberPayload(form, mode) {
   };
 
   if (mode === 'create') {
+    payload.password = form.password;
+  } else if (form.password) {
     payload.password = form.password;
   }
 
@@ -234,6 +295,13 @@ export default function AdminPortal() {
   const [memberForm, setMemberForm] = useState(createDefaultMemberForm());
   const [memberLoading, setMemberLoading] = useState(false);
   const [memberSaving, setMemberSaving] = useState(false);
+  const [memberPhotoUploading, setMemberPhotoUploading] = useState(false);
+  const [measurements, setMeasurements] = useState([]);
+  const [measurementForm, setMeasurementForm] = useState(createDefaultMeasurementForm());
+  const [measurementLoading, setMeasurementLoading] = useState(false);
+  const [measurementSaving, setMeasurementSaving] = useState(false);
+  const [trainerPhotoUploadingId, setTrainerPhotoUploadingId] = useState('');
+  const [trainerPasswordForms, setTrainerPasswordForms] = useState({});
   const [productForm, setProductForm] = useState(defaultProductForm);
   const [productSaving, setProductSaving] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
@@ -355,6 +423,9 @@ export default function AdminPortal() {
     setSelectedMemberId('');
     setMemberDetail(null);
     setMemberForm(createDefaultMemberForm());
+    setMeasurements([]);
+    setMeasurementForm(createDefaultMeasurementForm());
+    setTrainerPasswordForms({});
     setProductForm(defaultProductForm);
     setQrMethod('esewa');
     setNoticeForm(defaultNoticeForm);
@@ -422,6 +493,25 @@ export default function AdminPortal() {
     if (ok) setContacts(data.leads || []);
   }
 
+  async function loadMeasurements(memberId = selectedMemberId) {
+    if (!memberId) {
+      setMeasurements([]);
+      return;
+    }
+
+    setMeasurementLoading(true);
+    const { ok, data } = await adminApi(`/measurements?memberId=${encodeURIComponent(memberId)}`);
+    setMeasurementLoading(false);
+
+    if (ok) {
+      setMeasurements(data.measurements || []);
+      return;
+    }
+
+    setMeasurements([]);
+    showToast(data.message || 'Could not load measurements.');
+  }
+
   async function openMember(id) {
     if (!id) return;
 
@@ -438,6 +528,8 @@ export default function AdminPortal() {
 
     setMemberDetail(data.member);
     setMemberForm(mapMemberToForm(data.member));
+    setMeasurementForm(createDefaultMeasurementForm());
+    await loadMeasurements(id);
   }
 
   function startNewMember() {
@@ -447,6 +539,8 @@ export default function AdminPortal() {
     setMemberDetail(null);
     setMemberMode('create');
     setMemberForm(createDefaultMemberForm());
+    setMeasurements([]);
+    setMeasurementForm(createDefaultMeasurementForm());
   }
 
   function resetProductForm() {
@@ -463,6 +557,11 @@ export default function AdminPortal() {
 
     if (memberMode === 'create' && !memberForm.password) {
       showToast('Please set a password for the new member.');
+      return;
+    }
+
+    if (memberForm.password && memberForm.password.length < 6) {
+      showToast('Member password must be at least 6 characters.');
       return;
     }
 
@@ -553,6 +652,181 @@ export default function AdminPortal() {
 
     showToast(data.message || 'Trainer application updated.');
     await Promise.all([loadTrainerApps(), loadStats()]);
+  }
+
+  async function handleMemberPhotoChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please choose an image file.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Choose a profile photo under 2 MB.');
+      return;
+    }
+
+    setMemberPhotoUploading(true);
+    try {
+      const photo = await fileToDataUrl(file);
+      setMemberForm((current) => ({ ...current, photo }));
+      showToast(`${file.name} is ready to save.`);
+    } catch (error) {
+      showToast(error.message || 'Could not read the selected photo.');
+    } finally {
+      setMemberPhotoUploading(false);
+      event.target.value = '';
+    }
+  }
+
+  async function handleTrainerPhotoChange(event, trainer) {
+    const file = event.target.files?.[0];
+    if (!file || !trainer?._id) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please choose an image file.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Choose a trainer photo under 2 MB.');
+      return;
+    }
+
+    setTrainerPhotoUploadingId(trainer._id);
+    try {
+      const photo = await fileToDataUrl(file);
+      const { ok, data } = await adminApi(`/trainers/${trainer._id}`, {
+        method: 'PUT',
+        body: { photo },
+      });
+
+      if (!ok) {
+        showToast(data.message || 'Could not save trainer photo.');
+        return;
+      }
+
+      showToast('Trainer photo updated.');
+      await loadTrainerApps();
+    } catch (error) {
+      showToast(error.message || 'Could not read the selected photo.');
+    } finally {
+      setTrainerPhotoUploadingId('');
+      event.target.value = '';
+    }
+  }
+
+  async function resetTrainerPassword(trainer) {
+    const password = String(trainerPasswordForms[trainer._id] || '');
+    if (!password) {
+      showToast('Enter a new trainer password first.');
+      return;
+    }
+
+    if (password.length < 6) {
+      showToast('Trainer password must be at least 6 characters.');
+      return;
+    }
+
+    const { ok, data } = await adminApi(`/trainers/${trainer._id}`, {
+      method: 'PUT',
+      body: { password },
+    });
+
+    if (!ok) {
+      showToast(data.message || 'Could not reset trainer password.');
+      return;
+    }
+
+    setTrainerPasswordForms((current) => ({ ...current, [trainer._id]: '' }));
+    showToast(`Password reset for ${fullName(trainer)}.`);
+  }
+
+  async function saveMeasurement(event) {
+    event.preventDefault();
+    if (!selectedMemberId) {
+      showToast('Select a member before adding measurements.');
+      return;
+    }
+
+    if (!measurementForm.measuredAt || !measurementForm.height || !measurementForm.weight) {
+      showToast('Measurement date, height, and weight are required.');
+      return;
+    }
+
+    const body = {
+      member: selectedMemberId,
+      measuredAt: measurementForm.measuredAt,
+      trainer: measurementForm.trainer || undefined,
+      notes: measurementForm.notes,
+    };
+    measurementFields.forEach((field) => {
+      if (measurementForm[field.key] !== '') body[field.key] = Number(measurementForm[field.key]);
+    });
+
+    const existingRecordForDate = measurements.find((record) => (
+      formatDateInput(record.measuredAt) === measurementForm.measuredAt &&
+      (!measurementForm.id || record._id !== measurementForm.id)
+    ));
+    const measurementId = measurementForm.id || existingRecordForDate?._id || '';
+    const endpoint = measurementId ? `/measurements/${measurementId}` : '/measurements';
+    const method = measurementId ? 'PUT' : 'POST';
+
+    setMeasurementSaving(true);
+    const { ok, data } = await adminApi(endpoint, { method, body });
+    setMeasurementSaving(false);
+
+    if (!ok) {
+      showToast(data.message || 'Could not save measurement.');
+      return;
+    }
+
+    showToast(data.message || (measurementId ? 'Measurement updated.' : 'Measurement saved.'));
+    setMeasurementForm(createDefaultMeasurementForm());
+    await loadMeasurements(selectedMemberId);
+  }
+
+  function handleMeasurementDateChange(value) {
+    const existingRecord = measurements.find((record) => formatDateInput(record.measuredAt) === value);
+    if (existingRecord) {
+      setMeasurementForm(mapMeasurementToForm(existingRecord));
+      showToast('Existing measurement loaded for this date. Save to update it.');
+      return;
+    }
+
+    setMeasurementForm((current) => ({
+      ...createDefaultMeasurementForm(),
+      measuredAt: value,
+      trainer: current.trainer,
+    }));
+  }
+
+  function editMeasurement(record) {
+    setMeasurementForm(mapMeasurementToForm(record));
+  }
+
+  function clearMeasurementSelection() {
+    setSelectedMemberId('');
+    setMemberDetail(null);
+    setMeasurements([]);
+    setMeasurementForm(createDefaultMeasurementForm());
+  }
+
+  async function deleteMeasurement(id) {
+    if (!window.confirm('Delete this measurement record?')) {
+      return;
+    }
+
+    const { ok, data } = await adminApi(`/measurements/${id}`, { method: 'DELETE' });
+    if (!ok) {
+      showToast(data.message || 'Could not delete measurement.');
+      return;
+    }
+
+    showToast(data.message || 'Measurement deleted.');
+    await loadMeasurements(selectedMemberId);
   }
 
   async function handleProductImageChange(event) {
@@ -801,6 +1075,8 @@ export default function AdminPortal() {
 
   const openContacts = contacts.filter((lead) => lead.status !== 'closed').length;
   const hasUploadedProductImage = productForm.imageUrl.startsWith('data:image');
+  const hasUploadedMemberPhoto = memberForm.photo?.startsWith('data:image');
+  const approvedTrainers = trainerApps.filter((trainer) => trainer.trainerProfile?.applicationStatus === 'approved');
   const currentQrSettings = {
     ...(defaultPaymentMethods[qrMethod] || {}),
     ...(paymentSettings[qrMethod] || {}),
@@ -855,6 +1131,7 @@ export default function AdminPortal() {
             <button type="button" className="btn-red" onClick={startNewMember}>Add Member</button>
             <button type="button" className="btn-outline" onClick={() => setTab('products')}>Open Products</button>
             <button type="button" className="btn-outline" onClick={() => setTab('payments')}>Review Payments</button>
+            <button type="button" className="btn-outline" onClick={() => setTab('measurements')}>Measurement Chart</button>
             <button type="button" className="btn-outline" onClick={() => setTab('paymentQr')}>Payment QR</button>
           </div>
         </section>
@@ -1081,6 +1358,35 @@ export default function AdminPortal() {
                 )}
 
                 <form className="admin-form-stack" onSubmit={saveMember}>
+                  <div className="admin-image-preview">
+                    {memberForm.photo ? (
+                      <img src={memberForm.photo} alt={fullName(memberForm) || 'Member profile preview'} />
+                    ) : (
+                      <div className="admin-image-placeholder">No member profile picture selected yet</div>
+                    )}
+                  </div>
+
+                  <div className="admin-upload-block">
+                    <label className="admin-upload-label">
+                      <input type="file" accept="image/*" onChange={handleMemberPhotoChange} />
+                      <span>{memberPhotoUploading ? 'Reading photo...' : 'Choose Member Profile Picture'}</span>
+                    </label>
+                    <div className="admin-upload-copy">
+                      {memberForm.photo ? 'Profile picture is attached. Save the member to keep it.' : 'Choose a clear face photo from this device.'}
+                    </div>
+                  </div>
+
+                  {memberForm.photo && (
+                    <div className="admin-toolbar">
+                      <StatusPill tone={hasUploadedMemberPhoto ? 'success' : 'info'}>
+                        {hasUploadedMemberPhoto ? 'Local photo ready' : 'Profile photo set'}
+                      </StatusPill>
+                      <button type="button" className="btn-outline" onClick={() => setMemberForm((current) => ({ ...current, photo: '' }))}>
+                        Remove Profile Picture
+                      </button>
+                    </div>
+                  )}
+
                   <div className="admin-form-grid">
                     <Field label="First Name">
                       <input className="admin-control" value={memberForm.firstName} onChange={(event) => setMemberForm((current) => ({ ...current, firstName: event.target.value }))} />
@@ -1099,11 +1405,9 @@ export default function AdminPortal() {
                     </Field>
                   </div>
 
-                  {memberMode === 'create' && (
-                    <Field label="Password">
-                      <PasswordInput className="admin-control" value={memberForm.password} onChange={(event) => setMemberForm((current) => ({ ...current, password: event.target.value }))} placeholder="Set login password" autoComplete="new-password" />
-                    </Field>
-                  )}
+                  <Field label={memberMode === 'create' ? 'Member Login Password' : 'Reset Member Password'}>
+                    <PasswordInput className="admin-control" value={memberForm.password} onChange={(event) => setMemberForm((current) => ({ ...current, password: event.target.value }))} placeholder={memberMode === 'create' ? 'Set login password' : 'Leave blank to keep current password'} autoComplete="new-password" />
+                  </Field>
 
                   <div className="admin-form-grid admin-form-grid-three">
                     <Field label="Plan">
@@ -1204,6 +1508,197 @@ export default function AdminPortal() {
     );
   }
 
+  function renderMeasurements() {
+    const selectedMember = members.find((member) => member._id === selectedMemberId) || memberDetail;
+    const latestMeasurement = measurements[measurements.length - 1];
+    const previousMeasurement = measurements[measurements.length - 2];
+    const chartFields = measurementFields.filter((field) => ['weight', 'chest', 'abdomen', 'biceps', 'thighs', 'calves'].includes(field.key));
+    const chartMax = Math.max(
+      1,
+      ...measurements.flatMap((record) => chartFields.map((field) => Number(record?.[field.key]) || 0))
+    );
+
+    return (
+      <div className="admin-main-stack">
+        <section className="admin-surface">
+          <div className="admin-surface-header">
+            <div>
+              <h2>Measurement Chart</h2>
+              <p>Select a member, record measurements, and compare progress over time.</p>
+            </div>
+            <div className="admin-toolbar">
+              <button type="button" className="btn-outline" onClick={loadMembers}>Refresh Members</button>
+            </div>
+          </div>
+
+          <div className="admin-form-grid">
+            <Field label="Select Member">
+              <select
+                className="admin-control"
+                value={selectedMemberId}
+                onChange={(event) => {
+                  if (event.target.value) {
+                    openMember(event.target.value);
+                  } else {
+                    clearMeasurementSelection();
+                  }
+                }}
+              >
+                <option value="">Choose a member</option>
+                {members.map((member) => (
+                  <option key={member._id} value={member._id}>
+                    {fullName(member)} - {member.phone}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Member Summary">
+              <div className="admin-control static">
+                {selectedMember ? `${fullName(selectedMember)} | ${(selectedMember.membership?.plan || 'starter').toUpperCase()} plan` : 'No member selected'}
+              </div>
+            </Field>
+          </div>
+        </section>
+
+        {!selectedMemberId ? (
+          <EmptyState message="Choose a member above to open their measurement chart." />
+        ) : (
+          <div className="admin-products-layout">
+            <section className="admin-surface">
+              <div className="admin-surface-header">
+                <div>
+                  <h2>{measurementForm.id ? 'Update Measurement' : 'Add Measurement'}</h2>
+                  <p>
+                    {measurementForm.id
+                      ? 'This selected date already has a record. Saving will update that chart point.'
+                      : 'Pick a date. If that date already exists, the saved record will load for editing.'}
+                  </p>
+                </div>
+              </div>
+
+              <form className="admin-form-stack" onSubmit={saveMeasurement}>
+                <div className="admin-form-grid">
+                  <Field label="Measurement Date">
+                    <input className="admin-control" type="date" value={measurementForm.measuredAt} onChange={(event) => handleMeasurementDateChange(event.target.value)} />
+                  </Field>
+                  <Field label="Trainer">
+                    <select className="admin-control" value={measurementForm.trainer} onChange={(event) => setMeasurementForm((current) => ({ ...current, trainer: event.target.value }))}>
+                      <option value="">No trainer selected</option>
+                      {approvedTrainers.map((trainer) => (
+                        <option key={trainer._id} value={trainer._id}>{fullName(trainer)}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                <div className="admin-form-grid admin-form-grid-three">
+                  {measurementFields.map((field) => (
+                    <Field key={field.key} label={`${field.label}${field.required ? ' *' : ''} (${field.unit})`}>
+                      <input
+                        className="admin-control"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={measurementForm[field.key]}
+                        onChange={(event) => setMeasurementForm((current) => ({ ...current, [field.key]: event.target.value }))}
+                      />
+                    </Field>
+                  ))}
+                </div>
+
+                <Field label="Notes">
+                  <textarea className="admin-control admin-textarea" rows={3} value={measurementForm.notes} onChange={(event) => setMeasurementForm((current) => ({ ...current, notes: event.target.value }))} />
+                </Field>
+
+                <button type="submit" className="btn-red" disabled={measurementSaving}>
+                  {measurementSaving ? 'Saving...' : measurementForm.id ? 'Update Measurement' : 'Save Measurement'}
+                </button>
+                {measurementForm.id ? (
+                  <button type="button" className="btn-outline" onClick={() => setMeasurementForm(createDefaultMeasurementForm())}>
+                    Add New Date
+                  </button>
+                ) : null}
+              </form>
+            </section>
+
+            <section className="admin-surface">
+              <div className="admin-surface-header">
+                <div>
+                  <h2>Latest Progress</h2>
+                  <p>{measurementLoading ? 'Loading measurements...' : `${measurements.length} record${measurements.length === 1 ? '' : 's'} saved.`}</p>
+                </div>
+              </div>
+
+              {measurements.length === 0 ? (
+                <EmptyState message="No measurement records yet." />
+              ) : (
+                <div className="admin-card-list">
+                  <article className="admin-record-card">
+                    <div className="admin-record-main">
+                      <div className="admin-record-title">Latest: {formatDate(latestMeasurement.measuredAt)}</div>
+                      <div className="admin-chip-row">
+                        {measurementFields.map((field) => {
+                          const delta = measurementDelta(latestMeasurement, previousMeasurement, field);
+                          return (
+                            <StatusPill key={field.key} tone={delta === null ? 'info' : delta > 0 ? 'warning' : delta < 0 ? 'success' : 'neutral'}>
+                              {field.label}: {measurementValue(latestMeasurement, field)}
+                              {delta === null || delta === 0 ? '' : ` (${delta > 0 ? '+' : ''}${delta.toFixed(1)})`}
+                            </StatusPill>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </article>
+
+                  <div className="admin-measurement-chart">
+                    {chartFields.map((field) => (
+                      <div key={field.key} className="admin-measurement-chart-row">
+                        <strong>{field.label}</strong>
+                        <div className="admin-measurement-bars">
+                          {measurements.slice(-6).map((record) => {
+                            const value = Number(record?.[field.key]) || 0;
+                            const width = Math.max(4, Math.round((value / chartMax) * 100));
+                            return (
+                              <div key={`${record._id}-${field.key}`} className="admin-measurement-bar-wrap">
+                                <span className="admin-measurement-bar" style={{ width: `${width}%` }} />
+                                <small>{value ? `${value}${field.unit}` : '-'}</small>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {measurements.slice().reverse().map((record) => (
+                    <article key={record._id} className="admin-record-card">
+                      <div className="admin-record-main">
+                        <div className="admin-record-title">{formatDate(record.measuredAt)}</div>
+                        <div className="admin-meta-line">
+                          Trainer: {record.trainer ? fullName(record.trainer) : 'Not selected'}
+                        </div>
+                        <div className="admin-chip-row">
+                          {measurementFields.map((field) => (
+                            <StatusPill key={field.key} tone="info">{field.label}: {measurementValue(record, field)}</StatusPill>
+                          ))}
+                        </div>
+                        {record.notes ? <p>{record.notes}</p> : null}
+                      </div>
+                      <div className="admin-toolbar vertical">
+                        <button type="button" className="btn-outline" onClick={() => editMeasurement(record)}>Edit</button>
+                        <button type="button" className="btn-outline" onClick={() => deleteMeasurement(record._id)}>Delete</button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderMemberApplications() {
     return (
       <section className="admin-surface">
@@ -1270,6 +1765,25 @@ export default function AdminPortal() {
                   </StatusPill>
                   <button type="button" className="btn-red" onClick={() => updateTrainerApplication(trainer._id, 'approve')}>Approve</button>
                   <button type="button" className="btn-outline" onClick={() => updateTrainerApplication(trainer._id, 'reject')}>Reject</button>
+                </div>
+                <div className="admin-form-grid" style={{ marginTop: '0.85rem' }}>
+                  <Field label="Reset Login Password">
+                    <PasswordInput
+                      className="admin-control"
+                      value={trainerPasswordForms[trainer._id] || ''}
+                      onChange={(event) => setTrainerPasswordForms((current) => ({ ...current, [trainer._id]: event.target.value }))}
+                      placeholder="Set new trainer password"
+                      autoComplete="new-password"
+                    />
+                  </Field>
+                  <Field label="Trainer Login">
+                    <div className="admin-control static">
+                      {trainer.email || trainer.phone}
+                    </div>
+                  </Field>
+                </div>
+                <div className="admin-toolbar" style={{ marginTop: '0.75rem' }}>
+                  <button type="button" className="btn-outline" onClick={() => resetTrainerPassword(trainer)}>Save New Password</button>
                 </div>
               </article>
             ))}
@@ -1703,6 +2217,8 @@ export default function AdminPortal() {
         return renderDashboard();
       case 'members':
         return renderMembers();
+      case 'measurements':
+        return renderMeasurements();
       case 'memberApps':
         return renderMemberApplications();
       case 'trainerApps':

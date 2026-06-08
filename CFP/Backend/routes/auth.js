@@ -216,8 +216,8 @@ router.put('/update', protect, async (req, res) => {
         return res.status(400).json({ success: false, message: 'Phone is required' });
       }
 
-      const existingPhoneUser = await User.findOne({ phone: updates.phone, _id: { $ne: req.user.id } }).select('_id');
-      if (existingPhoneUser) {
+      const existingPhoneUser = await User.findOne({ phone: updates.phone }).select('_id');
+      if (existingPhoneUser && String(existingPhoneUser._id) !== String(req.user.id)) {
         return res.status(400).json({ success: false, message: 'Phone already registered' });
       }
     }

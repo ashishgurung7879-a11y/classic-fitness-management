@@ -3243,6 +3243,14 @@ section#notices { background: #f4f4f6 !important; border-top-color: rgba(204,0,0
   color: var(--gold);
 }
 
+.password-field .admin-control ~ .password-toggle {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.password-field .admin-control ~ .password-toggle:hover {
+  color: #ffcf78;
+}
+
 .password-field .inp,
 .password-field .admin-control {
   padding-right: 4.5rem;
@@ -3808,6 +3816,62 @@ section#notices { background: #f4f4f6 !important; border-top-color: rgba(204,0,0
   display: none;
 }
 
+.admin-control.static {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.admin-measurement-chart {
+  display: grid;
+  gap: 0.95rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-measurement-chart-row {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.admin-measurement-chart-row strong {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.86rem;
+}
+
+.admin-measurement-bars {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-measurement-bar-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.admin-measurement-bar-wrap small {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.72rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.admin-measurement-bar {
+  display: block;
+  height: 10px;
+  min-width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #cc0000, #ff6b4a);
+}
+
 .admin-backdrop {
   display: none;
 }
@@ -3874,6 +3938,7 @@ section#notices { background: #f4f4f6 !important; border-top-color: rgba(204,0,0
   .admin-form-grid,
   .admin-form-grid-three,
   .admin-member-summary,
+  .admin-measurement-chart-row,
   .admin-product-card,
   .admin-payment-card {
     grid-template-columns: 1fr;
