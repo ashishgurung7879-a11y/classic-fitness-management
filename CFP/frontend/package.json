@@ -7,18 +7,12 @@
   "scripts": {
     "dev": "vite --port 8080",
     "start": "vite --port 8080",
-    "build": "vite build && node sync-live-server-assets.cjs",
-    "build:web": "vite build && node sync-live-server-assets.cjs",
+    "build": "vite build",
+    "build:web": "vite build",
     "test": "node tests/homepage-regression.test.mjs",
-    "android:sync": "npm run build && npx cap sync android",
-    "android:open": "npx cap open android",
-    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
-    "preview": "node dev-server.cjs --port 4173"
+    "preview": "vite preview"
   },
   "devDependencies": {
-    "@capacitor/android": "^8.3.1",
-    "@capacitor/cli": "^8.3.1",
-    "@capacitor/core": "^8.3.1",
     "vite": "^7.1.10"
   },
   "dependencies": {
@@ -26,5 +20,8 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.15.1"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.60.1"
   }
 }

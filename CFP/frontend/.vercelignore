@@ -1,0 +1,10 @@
+node_modules/
+.vite/
+dist/
+tests/
+*.bat
+APK_*.md
+android/
+*.apk
+*.keystore
+README.md
