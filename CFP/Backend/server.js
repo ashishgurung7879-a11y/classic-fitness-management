@@ -31,7 +31,7 @@ const configuredOrigins = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.sp
 const allowedOrigins = Array.from(new Set([...configuredOrigins, ...defaultFrontendOrigins]));
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  console.error('❌ Missing or weak JWT_SECRET. Create Backend/.env from Backend/.env.example and set a strong secret.');
+  console.error(' Missing or weak JWT_SECRET. Create Backend/.env from Backend/.env.example and set a strong secret.');
   process.exit(1);
 }
 
@@ -102,17 +102,17 @@ if (process.env.NODE_ENV !== 'production') {
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/classic_fitness_park';
 mongoose.connect(MONGO_URI)
   .then(async () => {
-    console.log('✅ MongoDB Connected:', MONGO_URI.replace(/\/\/.*@/, '//***@'));
+    console.log(' MongoDB Connected:', MONGO_URI.replace(/\/\/.*@/, '//***@'));
     try {
       await User.syncIndexes();
-      console.log('✅ User indexes synced');
+      console.log(' User indexes synced');
     } catch (indexErr) {
-      console.error('⚠️ User index sync warning:', indexErr.message);
+      console.error(' User index sync warning:', indexErr.message);
     }
   })
   .catch(err => {
-    console.error('❌ MongoDB Error:', err.message);
-    console.log('💡 Make sure MongoDB is running: services.msc → MongoDB Server → Start');
+    console.error(' MongoDB Error:', err.message);
+    console.log(' Make sure MongoDB is running: services.msc → MongoDB Server → Start');
   });
 
 // ── ROUTES ────────────────────────────────────
@@ -154,11 +154,11 @@ app.use('/api/measurements', measurementsRouter);
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
-    message: '💪 Classic Fitness Park API is Running!',
+    message: ' Classic Fitness Park API is Running!',
     gym: 'Classic Fitness Park',
     location: 'Kakarvitta, Jhapa, Nepal',
     version: '3.0.0',
-    mongodb: mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected',
+    mongodb: mongoose.connection.readyState === 1 ? ' Connected' : ' Disconnected',
     time: new Date().toISOString()
   });
 });
@@ -202,10 +202,10 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('\n══════════════════════════════════════');
-  console.log('🏋️  CLASSIC FITNESS PARK v3.0');
-  console.log('📍 Kakarvitta, Jhapa, Nepal');
-  console.log(`🚀 http://localhost:${PORT}/api`);
-  console.log(`💚 http://localhost:${PORT}/api/health`);
+  console.log('  CLASSIC FITNESS PARK v3.0');
+  console.log(' Kakarvitta, Jhapa, Nepal');
+  console.log(` http://localhost:${PORT}/api`);
+  console.log(` http://localhost:${PORT}/api/health`);
   console.log('══════════════════════════════════════\n');
 });
 

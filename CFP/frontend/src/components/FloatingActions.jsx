@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
 
+import React, { useEffect, useState } from 'react';
+import { FaWhatsapp } from 'react-icons/fa';
 export default function FloatingActions() {
   const [showBackToTop, setShowBackToTop] = useState(false);
 
@@ -19,16 +20,19 @@ export default function FloatingActions() {
   return (
     <>
       <a
+
         href="https://wa.me/+9779825933443"
         className="float-wa"
         target="_blank"
         rel="noreferrer"
         title="Chat on WhatsApp"
         aria-label="Chat on WhatsApp"
+        
       >
-        WA
+         <FaWhatsapp size={28} />
       </a>
       <button
+      
         className={`back-to-top${showBackToTop ? ' show' : ''}`}
         type="button"
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
