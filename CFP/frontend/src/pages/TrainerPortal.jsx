@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import SiteMeta from '../components/SiteMeta';
 import PasswordInput from '../components/PasswordInput';
 import useViewportMatch from '../hooks/useViewportMatch';
-import { clearSession, publicApi, setSession, trainerApi } from '../utils/api';
+import { clearSession, fileToDataUrl, publicApi, setSession, trainerApi } from '../utils/api';
 import { useToast } from '../context/ToastContext';
 
 const tabs = [
@@ -37,6 +37,8 @@ const specialityOptions = [
   'General Fitness',
 ];
 
+const PROFILE_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
+
 const defaultTrainerLoginForm = { identifier: '', password: '' };
 const defaultTrainerRegisterForm = {
   firstName: '',
@@ -44,13 +46,14 @@ const defaultTrainerRegisterForm = {
   phone: '',
   email: '',
   password: '',
+  photo: '',
   experience: '1',
   specialities: ['Strength Training'],
   certifications: '',
   bio: '',
 };
 const defaultTrainerForgotForm = { contact: '', otp: '', newPassword: '', confirmPassword: '' };
-const defaultTrainerProfileForm = { firstName: '', lastName: '', phone: '', bio: '', certifications: '' };
+const defaultTrainerProfileForm = { firstName: '', lastName: '', phone: '', photo: '', bio: '', certifications: '' };
 
 function noticeTag(value) {
   const cleaned = String(value || '').trim().replace(/[^a-z0-9 ]/gi, '').toUpperCase();
@@ -84,6 +87,7 @@ export default function TrainerPortal() {
   const [profileForm, setProfileForm] = useState(defaultTrainerProfileForm);
   const [slotForm, setSlotForm] = useState({ dayOfWeek: '1', startTime: '06:00', endTime: '08:00', maxBookings: '3' });
   const [resetCodeSent, setResetCodeSent] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState('');
 
   useEffect(() => {
     if (localStorage.getItem('cfp_trainer_token')) {
@@ -105,6 +109,7 @@ export default function TrainerPortal() {
       firstName: me.data.user.firstName || '',
       lastName: me.data.user.lastName || '',
       phone: me.data.user.phone || '',
+      photo: me.data.user.photo || '',
       bio: me.data.user.trainerProfile?.bio || '',
       certifications: me.data.user.trainerProfile?.certifications || '',
     });
@@ -140,6 +145,7 @@ export default function TrainerPortal() {
     setMembers([]);
     setNotices([]);
     setProfileForm(defaultTrainerProfileForm);
+    setPhotoUploading('');
     setTab('overview');
   }
 
@@ -187,6 +193,7 @@ export default function TrainerPortal() {
       firstName: data.user.firstName || '',
       lastName: data.user.lastName || '',
       phone: data.user.phone || '',
+      photo: data.user.photo || '',
       bio: data.user.trainerProfile?.bio || '',
       certifications: data.user.trainerProfile?.certifications || '',
     });
@@ -210,6 +217,7 @@ export default function TrainerPortal() {
         phone: registerForm.phone,
         email: registerForm.email,
         password: registerForm.password,
+        photo: registerForm.photo,
         role: 'trainer',
         trainerApplication: {
           experience: registerForm.experience,
@@ -314,6 +322,7 @@ export default function TrainerPortal() {
         firstName: profileForm.firstName,
         lastName: profileForm.lastName,
         phone: profileForm.phone,
+        photo: profileForm.photo,
         trainerProfile: {
           bio: profileForm.bio,
           certifications: profileForm.certifications,
@@ -329,6 +338,39 @@ export default function TrainerPortal() {
     setTrainer(data.user);
     setSession('trainer', localStorage.getItem('cfp_trainer_token') || '', data.user);
     showToast('Trainer profile updated.');
+  }
+
+  async function handlePhotoChange(event, target) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please choose an image file.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > PROFILE_PHOTO_MAX_BYTES) {
+      showToast('Choose a profile photo under 2 MB.');
+      event.target.value = '';
+      return;
+    }
+
+    setPhotoUploading(target);
+    try {
+      const photo = await fileToDataUrl(file);
+      if (target === 'register') {
+        setRegisterForm((current) => ({ ...current, photo }));
+      } else {
+        setProfileForm((current) => ({ ...current, photo }));
+      }
+      showToast(`${file.name} is ready to save.`);
+    } catch (error) {
+      showToast(error.message || 'Could not read the selected photo.');
+    } finally {
+      setPhotoUploading('');
+      event.target.value = '';
+    }
   }
 
   async function addScheduleSlot(event) {
@@ -431,6 +473,26 @@ export default function TrainerPortal() {
               <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: '0.85rem' }}>
                 <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Password</div><PasswordInput className="inp" value={registerForm.password} onChange={(event) => setRegisterForm((current) => ({ ...current, password: event.target.value }))} autoComplete="new-password" /></label>
                 <label><div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Experience (years)</div><input className="inp" value={registerForm.experience} onChange={(event) => setRegisterForm((current) => ({ ...current, experience: event.target.value }))} /></label>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '104px minmax(0, 1fr)', gap: '0.85rem', alignItems: 'center', padding: '0.9rem', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', background: 'rgba(255,255,255,0.03)' }}>
+                <div style={{ width: isPhone ? '96px' : '104px', height: isPhone ? '96px' : '104px', borderRadius: '16px', overflow: 'hidden', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.55)', justifySelf: isPhone ? 'start' : 'auto' }}>
+                  {registerForm.photo ? <img src={registerForm.photo} alt="Trainer profile preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Photo'}
+                </div>
+                <div style={{ display: 'grid', gap: '0.65rem', minWidth: 0 }}>
+                  <div>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'rgba(255,255,255,0.72)' }}>Profile picture</div>
+                    <div style={{ color: 'rgba(255,255,255,0.62)', fontSize: '0.84rem', marginTop: '0.25rem', lineHeight: 1.45 }}>Choose a clear trainer photo from this device.</div>
+                  </div>
+                  <label className="btn-outline" style={{ textAlign: 'center', cursor: 'pointer', width: isPhone ? '100%' : 'fit-content' }}>
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(event) => handlePhotoChange(event, 'register')} />
+                    {photoUploading === 'register' ? 'Reading Photo...' : registerForm.photo ? 'Change Picture' : 'Choose Picture'}
+                  </label>
+                  {registerForm.photo ? (
+                    <button type="button" className="btn-outline" style={{ width: isPhone ? '100%' : 'fit-content' }} onClick={() => setRegisterForm((current) => ({ ...current, photo: '' }))}>
+                      Remove Picture
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem', color: 'rgba(255,255,255,0.72)' }}>Specialities</div>
@@ -606,6 +668,28 @@ export default function TrainerPortal() {
           <form style={{ ...cardStyle, maxWidth: '720px' }} onSubmit={saveProfile}>
             <h2 style={{ marginTop: 0 }}>Update trainer profile</h2>
             <div style={{ display: 'grid', gap: '0.85rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '128px minmax(0, 1fr)', gap: '1rem', alignItems: 'center', padding: '1rem', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '18px', background: 'rgba(255,255,255,0.03)' }}>
+                <div style={{ width: '128px', height: '128px', borderRadius: '20px', overflow: 'hidden', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.55)' }}>
+                  {profileForm.photo ? <img src={profileForm.photo} alt="Trainer profile preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Photo'}
+                </div>
+                <div style={{ display: 'grid', gap: '0.7rem', minWidth: 0 }}>
+                  <div>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'rgba(255,255,255,0.72)' }}>Profile picture</div>
+                    <div style={{ color: 'rgba(255,255,255,0.62)', fontSize: '0.84rem', marginTop: '0.25rem', lineHeight: 1.45 }}>This photo appears on the public trainer page after admin approval.</div>
+                  </div>
+                  <div style={{ display: isPhone ? 'grid' : 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+                    <label className="btn-outline" style={{ textAlign: 'center', cursor: 'pointer', width: isPhone ? '100%' : undefined }}>
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(event) => handlePhotoChange(event, 'profile')} />
+                      {photoUploading === 'profile' ? 'Reading Photo...' : profileForm.photo ? 'Change Picture' : 'Choose Picture'}
+                    </label>
+                    {profileForm.photo ? (
+                      <button type="button" className="btn-outline" style={{ width: isPhone ? '100%' : undefined }} onClick={() => setProfileForm((current) => ({ ...current, photo: '' }))}>
+                        Remove Picture
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: '0.85rem' }}>
                 <label><div style={{ fontSize: '0.78rem', marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>First name</div><input className="inp" value={profileForm.firstName} onChange={(event) => setProfileForm((current) => ({ ...current, firstName: event.target.value }))} /></label>
                 <label><div style={{ fontSize: '0.78rem', marginBottom: '0.35rem', color: 'rgba(255,255,255,0.72)' }}>Last name</div><input className="inp" value={profileForm.lastName} onChange={(event) => setProfileForm((current) => ({ ...current, lastName: event.target.value }))} /></label>

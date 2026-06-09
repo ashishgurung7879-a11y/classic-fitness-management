@@ -6,6 +6,7 @@ const { authLimiter } = require('../middleware/security');
 const { normalizeOptionalEmail, normalizePhone, getDuplicateField } = require('../utils/userFields');
 const { sendLoginWelcomeNotification, sendPasswordResetCodeNotification } = require('../utils/notifications');
 const { generateOneTimeCode, hashOneTimeCode, verifyOneTimeCode } = require('../utils/oneTimeCode');
+const { validateProfilePhoto } = require('../utils/photos');
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -31,9 +32,14 @@ const sendToken = (user, code, res, msg) => {
 
 router.post('/register', async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password, dateOfBirth, gender, role, trainerApplication } = req.body;
+    const { firstName, lastName, email, phone, password, dateOfBirth, gender, role, trainerApplication, photo } = req.body;
     const normalizedEmail = normalizeOptionalEmail(email);
     const normalizedPhone = normalizePhone(phone);
+    const photoCheck = validateProfilePhoto(photo);
+    if (photoCheck.error) {
+      return res.status(400).json({ success: false, message: photoCheck.error });
+    }
+
     if (!firstName || !normalizedPhone || !password) {
       return res.status(400).json({ success: false, message: 'First name, phone, and password are required' });
     }
@@ -64,6 +70,7 @@ router.post('/register', async (req, res) => {
         password,
         dateOfBirth,
         gender,
+        photo: photoCheck.value,
         role: 'trainer',
         trainerProfile: {
           applicationStatus: 'pending',
@@ -89,6 +96,7 @@ router.post('/register', async (req, res) => {
       password,
       dateOfBirth,
       gender,
+      photo: photoCheck.value,
       approvalStatus: 'pending'
     });
 
@@ -190,8 +198,12 @@ router.get('/me', protect, async (req, res) => {
 
 router.put('/update', protect, async (req, res) => {
   try {
-    if (req.body.photo && req.body.photo.length > 2 * 1024 * 1024) {
-      return res.status(400).json({ success: false, message: 'Photo too large. Max 2MB.' });
+    if (req.body.photo !== undefined) {
+      const photoCheck = validateProfilePhoto(req.body.photo);
+      if (photoCheck.error) {
+        return res.status(400).json({ success: false, message: photoCheck.error });
+      }
+      req.body.photo = photoCheck.value;
     }
 
     const allowed = ['firstName', 'lastName', 'phone', 'address', 'gender', 'dateOfBirth', 'fitnessData', 'photo'];

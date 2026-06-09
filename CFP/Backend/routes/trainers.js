@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { TrainerSchedule, Booking } = require('../models/models');
 const { protect, authorize } = require('../middleware/auth');
 const { normalizeOptionalEmail, normalizePhone, getDuplicateField } = require('../utils/userFields');
+const { validateProfilePhoto } = require('../utils/photos');
 
 function parseOptionalDate(value) {
   if (value === undefined || value === null || value === '') return undefined;
@@ -228,6 +229,10 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
     if (password.length < 6) {
       return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
     }
+    const photoCheck = validateProfilePhoto(req.body?.photo);
+    if (photoCheck.error) {
+      return res.status(400).json({ success: false, message: photoCheck.error });
+    }
 
     const duplicateChecks = [{ phone: normalizedPhone }];
     if (normalizedEmail) duplicateChecks.push({ email: normalizedEmail });
@@ -246,7 +251,7 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
       phone: normalizedPhone,
       password,
       role: 'trainer',
-      photo: String(req.body?.photo || '').trim(),
+      photo: photoCheck.value,
       gender: req.body?.gender,
       dateOfBirth: parseOptionalDate(req.body?.dateOfBirth),
       address: String(req.body?.address || '').trim(),
@@ -284,6 +289,14 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
     const trainer = await User.findOne({ _id: req.params.id, role: 'trainer' }).select('-password');
     if (!trainer) {
       return res.status(404).json({ success: false, message: 'Trainer not found' });
+    }
+
+    if (req.body.photo !== undefined) {
+      const photoCheck = validateProfilePhoto(req.body.photo);
+      if (photoCheck.error) {
+        return res.status(400).json({ success: false, message: photoCheck.error });
+      }
+      req.body.photo = photoCheck.value;
     }
 
     const allowedTopLevelFields = ['firstName', 'lastName', 'photo', 'gender', 'address', 'isActive', 'approvalStatus'];
