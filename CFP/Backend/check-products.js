@@ -1,22 +1,19 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
+const { Product } = require('./models/models');
+const { pool } = require('./db/mysql');
 
 (async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  try {
+    const products = await Product.find({}).limit(5);
 
-  const products = await mongoose.connection.db
-    .collection('products')
-    .find({})
-    .limit(5)
-    .toArray();
-
-  for (const p of products) {
-    console.log('PRODUCT:', p.name);
-    console.log('imageUrl type:', typeof p.imageUrl);
-    console.log('imageUrl length:', p.imageUrl ? String(p.imageUrl).length : 0);
-    console.log('imageUrl preview:', String(p.imageUrl || '').slice(0, 120));
-    console.log('----------------');
+    for (const product of products) {
+      console.log('PRODUCT:', product.name);
+      console.log('imageUrl type:', typeof product.imageUrl);
+      console.log('imageUrl length:', product.imageUrl ? String(product.imageUrl).length : 0);
+      console.log('imageUrl preview:', String(product.imageUrl || '').slice(0, 120));
+      console.log('----------------');
+    }
+  } finally {
+    await pool.end().catch(() => {});
   }
-
-  process.exit(0);
 })();

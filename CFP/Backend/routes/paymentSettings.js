@@ -1,6 +1,6 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const { protect, authorize } = require('../middleware/auth');
+const { PaymentSetting } = require('../models/models');
 
 const router = express.Router();
 
@@ -30,15 +30,6 @@ const defaultMethods = {
     isActive: true,
   },
 };
-
-const PaymentSettingSchema = new mongoose.Schema({
-  key: { type: String, required: true, unique: true },
-  methods: { type: Object, default: {} },
-  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-}, { timestamps: true });
-
-const PaymentSetting = mongoose.models.PaymentSetting ||
-  mongoose.model('PaymentSetting', PaymentSettingSchema);
 
 function mergeMethods(storedMethods = {}) {
   return Object.entries(defaultMethods).reduce((methods, [key, defaults]) => {
@@ -71,7 +62,7 @@ function validateImageUrl(imageUrl) {
 }
 
 async function getSettings() {
-  const document = await PaymentSetting.findOne({ key: SETTINGS_KEY }).lean();
+  const document = await PaymentSetting.findOne({ key: SETTINGS_KEY });
   return {
     success: true,
     methods: mergeMethods(document?.methods),
@@ -99,7 +90,7 @@ router.put('/:method', protect, authorize('admin'), async (req, res) => {
       return res.status(400).json({ success: false, message: imageError });
     }
 
-    const current = await PaymentSetting.findOne({ key: SETTINGS_KEY }).lean();
+    const current = await PaymentSetting.findOne({ key: SETTINGS_KEY });
     const methods = mergeMethods(current?.methods);
     const currentMethod = methods[method];
 

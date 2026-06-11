@@ -4,9 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
-
-// Use existing mongoose
-const mongoose = require('mongoose');
+const { ManualPayment } = require('../models/models');
 const MAX_IMAGE_DATA_LENGTH = 4_500_000;
 
 function validateScreenshotInput(screenshot) {
@@ -21,22 +19,6 @@ function validateScreenshotInput(screenshot) {
 }
 
 // ── MANUAL PAYMENT SCHEMA ─────────────────────────────────────
-const ManualPaymentSchema = new mongoose.Schema({
-  user:          { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  paymentMethod: { type: String, enum: ['esewa', 'prabhu_bank', 'khalti'], required: true },
-  plan:          { type: String, enum: ['starter', 'pro', 'elite'], required: true },
-  amount:        { type: Number, required: true },
-  referenceId:   { type: String, trim: true },
-  screenshot:    { type: String }, // base64 or URL
-  status:        { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending' },
-  adminNote:     { type: String },
-  verifiedBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  verifiedAt:    { type: Date },
-  createdAt:     { type: Date, default: Date.now }
-});
-const ManualPayment = mongoose.models.ManualPayment ||
-  mongoose.model('ManualPayment', ManualPaymentSchema);
-
 // ── MEMBER: Submit payment proof ─────────────────────────────
 router.post('/submit', protect, async (req, res) => {
   try {

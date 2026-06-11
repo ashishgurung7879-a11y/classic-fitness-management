@@ -31,6 +31,8 @@ function readCachedProducts() {
 }
 
 export default function ShopSection({ onAddToCart, onOpenCart, cart }) {
+  console.log('SHOPSECTION LOADED');
+
   const [products, setProducts] = useState(readCachedProducts);
   const [cat, setCat] = useState('all');
   const [search, setSearch] = useState('');
@@ -41,8 +43,13 @@ export default function ShopSection({ onAddToCart, onOpenCart, cart }) {
     let cancelled = false;
 
     async function loadProducts() {
-      console.debug('[ShopSection] requesting public products');
-      const { ok, data, status } = await publicApi('/products');
+  console.log('LOADPRODUCTS STARTED');
+
+  const result = await publicApi('/products');
+
+  console.log('API RESULT:', result);
+
+  const { ok, data, status } = result;
       if (cancelled) return;
 
       if (!ok) {
@@ -53,6 +60,22 @@ export default function ShopSection({ onAddToCart, onOpenCart, cart }) {
       }
 
       const fetchedProducts = Array.isArray(data.products) ? data.products : [];
+      console.log('FETCHED PRODUCTS:', fetchedProducts);
+      console.log('FIRST PRODUCT', fetchedProducts[0]);
+
+console.log({
+  name: fetchedProducts[0]?.name,
+  price: fetchedProducts[0]?.price,
+  salePrice: fetchedProducts[0]?.salePrice,
+  category: fetchedProducts[0]?.category,
+  imageUrl: fetchedProducts[0]?.imageUrl?.slice(0, 50),
+  stock: fetchedProducts[0]?.stock,
+  isActive: fetchedProducts[0]?.isActive
+});
+      console.log(
+  'FETCHED PRODUCTS:',
+  JSON.stringify(fetchedProducts, null, 2)
+);
       const visibleProducts = fetchedProducts.filter((product) => product?.isActive !== false);
 
       if (visibleProducts.length !== fetchedProducts.length) {
@@ -76,22 +99,27 @@ export default function ShopSection({ onAddToCart, onOpenCart, cart }) {
     }
 
     loadProducts();
-
+console.log('PRODUCTS STATE', products);
+console.log('FILTERED', filtered);
     return () => {
       cancelled = true;
     };
   }, []);
 
   const filtered = products.filter((product) =>
-    (cat === 'all' || (product?.category || 'other') === cat) &&
-    (
-      String(product?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-      String(product?.description || '').toLowerCase().includes(search.toLowerCase())
-    )
-  );
+  (cat === 'all' || (product?.category || 'other') === cat) &&
+  (
+    String(product?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    String(product?.description || '').toLowerCase().includes(search.toLowerCase())
+  )
+);
 
-  const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
+console.log('PRODUCTS STATE', products);
+console.log('PRODUCTS LENGTH', products.length);
+console.log('FILTERED', filtered);
+console.log('FILTERED LENGTH', filtered.length);
 
+const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
   return (
     <section className="shop" id="shop">
       <div className="container">
@@ -99,8 +127,7 @@ export default function ShopSection({ onAddToCart, onOpenCart, cart }) {
           <div className="section-label">SUPPLEMENT STORE</div>
           <h2 className="section-title">CFP <span className="gold">Shop</span></h2>
           <p>Premium supplements and gear right at the gym</p>
-        </div>
-
+    </div>
         <div className="shop-controls">
           <div className="cat-filters">
             {CATS.map((category) => (
@@ -126,46 +153,94 @@ export default function ShopSection({ onAddToCart, onOpenCart, cart }) {
 
         {apiError ? <p className="shop-note">Showing saved shop products. Start the backend to load the latest admin products.</p> : null}
 
-        <div className="products-grid" id="productsGrid">
-          {apiLoaded && products.length === 0 ? (
-            <div className="shop-empty">No active products are available right now.</div>
-          ) : filtered.length === 0 ? (
-            <div className="shop-empty">No products found.</div>
-          ) : filtered.map((product) => {
-            const productName = String(product?.name || 'Untitled product').trim() || 'Untitled product';
-            const price = product.salePrice != null ? product.salePrice : product.price;
-            const off = discount(product);
-            const outOfStock = Number(product.stock ?? 0) <= 0;
+        
+          <div className="products-grid" id="productsGrid">
 
-            return (
-              <article key={product._id} className="product-card visible">
-                <div className="product-img">
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={productName} />
-                  ) : (
-                    <div className="prod-emoji">{product.emoji || 'PR'}</div>
-                  )}
-                  {product.badge ? <span className={`prod-badge ${product.badge}`}>{product.badge.toUpperCase()}</span> : null}
-                  {off > 0 ? <span className="prod-disc">{off}% OFF</span> : null}
-                </div>
+  <div style={{ color: 'red', fontSize: '30px' }}>
+    PRODUCTS FOUND: {filtered.length}
+  </div>
+  {apiLoaded && products.length === 0 ? (
+    <div className="shop-empty">
+      No active products are available right now.
+    </div>
+  ) : filtered.length === 0 ? (
+    <div className="shop-empty">
+      No products found.
+    </div>
+  ) : (
+    filtered.map((product) => {
+      const productName =
+        String(product?.name || 'Untitled product').trim() ||
+        'Untitled product';
 
-                <div className="prod-body">
-                  <div className="prod-cat">{product.category}</div>
-                  <div className="prod-name">{productName}</div>
-                  <div className="prod-desc">{product.description}</div>
-                  <div className="prod-stars">{stars(product.rating?.avg || 4)} <small>({product.rating?.count || 0})</small></div>
-                  <div className="prod-price-row">
-                    <span className="price-new">Rs. {price.toLocaleString()}</span>
-                    {product.salePrice ? <span className="price-old">Rs. {product.price.toLocaleString()}</span> : null}
-                  </div>
-                  <button type="button" className="btn-add" disabled={outOfStock} onClick={() => !outOfStock && onAddToCart(productName, price, product._id)}>
-                    {outOfStock ? 'OUT OF STOCK' : 'ADD TO CART'}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+      const price =
+        product.salePrice != null
+          ? product.salePrice
+          : product.price;
+
+      const off = discount(product);
+      const outOfStock = Number(product.stock ?? 0) <= 0;
+
+      return (
+        <article key={product._id} className="product-card visible">
+          <div className="product-img">
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt={productName} />
+            ) : (
+              <div className="prod-emoji">{product.emoji || 'PR'}</div>
+            )}
+
+            {product.badge ? (
+              <span className={`prod-badge ${product.badge}`}>
+                {product.badge.toUpperCase()}
+              </span>
+            ) : null}
+
+            {off > 0 ? (
+              <span className="prod-disc">{off}% OFF</span>
+            ) : null}
+          </div>
+
+          <div className="prod-body">
+            <div className="prod-cat">{product.category}</div>
+            <div className="prod-name">{productName}</div>
+            <div className="prod-desc">{product.description}</div>
+
+            <div className="prod-stars">
+              {stars(product.rating?.avg || 4)}
+              <small>({product.rating?.count || 0})</small>
+            </div>
+
+            <div className="prod-price-row">
+              <span className="price-new">
+                Rs. {price.toLocaleString()}
+              </span>
+
+              {product.salePrice ? (
+                <span className="price-old">
+                  Rs. {product.price.toLocaleString()}
+                </span>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              className="btn-add"
+              disabled={outOfStock}
+              onClick={() =>
+                !outOfStock &&
+                onAddToCart(productName, price, product._id)
+              }
+            >
+              {outOfStock ? 'OUT OF STOCK' : 'ADD TO CART'}
+            </button>
+          </div>
+        </article>
+      );
+    }
+    )
+  )}
+</div>
       </div>
     </section>
   );

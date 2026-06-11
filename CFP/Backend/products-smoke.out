@@ -1,0 +1,11 @@
+ MySQL Connected
+
+══════════════════════════════════════
+  CLASSIC FITNESS PARK v3.0
+ Kakarvitta, Jhapa, Nepal
+ http://localhost:5062/api
+ http://localhost:5062/api/health
+══════════════════════════════════════
+
+GET /api/products
+[GET /api/products] returning 5 active products

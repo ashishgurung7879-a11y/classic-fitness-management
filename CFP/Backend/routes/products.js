@@ -1,28 +1,11 @@
 // ============================================================
 // PRODUCTS ROUTE — Full CRUD with validation
 // ============================================================
+console.log('USING MYSQL PRODUCTS ROUTE');
+const { Product } = require('../models/models');
 const express = require('express');
 const r = express.Router();
-const mongoose = require('mongoose');
 const { protect, authorize } = require('../middleware/auth');
-
-// ── PRODUCT SCHEMA ────────────────────────────────────────────
-const ProductSchema = new mongoose.Schema({
-  name:        { type: String, required: true, trim: true },
-  price:       { type: Number, required: true, min: 0 },
-  salePrice:   { type: Number, default: null },
-  description: { type: String, default: '' },
-  category:    { type: String, enum: ['protein','vitamins','gear','apparel','drinks','other'], default: 'other' },
-  emoji:       { type: String, default: '💊' },
-  imageUrl:    { type: String, default: '' },
-  badge:       { type: String, default: '' },
-  stock:       { type: Number, default: 50 },
-  isActive:    { type: Boolean, default: true },
-  rating:      { avg: { type: Number, default: 4.5 }, count: { type: Number, default: 0 } },
-  createdAt:   { type: Date, default: Date.now }
-});
-
-const Product = mongoose.models.Product || mongoose.model('Product', ProductSchema);
 
 function normalizeProductPayload(body = {}) {
   const price = Number(body.price || 0);
@@ -91,6 +74,26 @@ r.get('/', async (req, res) => {
     });
   }
 });
+// GET all products (admin)
+r.get('/admin/all', protect, authorize('admin'), async (req, res) => {
+  try {
+    const products = await Product.find({});
+    products.sort(
+  (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+);
+    res.json({
+      success: true,
+      products
+    });
+  } catch (err) {
+    console.error('[GET /api/products/admin/all] error', err);
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
+
 // ── GET single product (public) ───────────────────────────────
 r.get('/:id', async (req, res) => {
   try {

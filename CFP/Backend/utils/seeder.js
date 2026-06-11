@@ -1,9 +1,8 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-const mongoose = require('mongoose');
 const User = require('../models/User');
+const { pool } = require('../db/mysql');
 
-const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/classic_fitness_park';
 const adminPassword = process.env.SEED_ADMIN_PASSWORD;
 const trainerPassword = process.env.SEED_TRAINER_PASSWORD;
 const memberPassword = process.env.SEED_MEMBER_PASSWORD;
@@ -67,8 +66,7 @@ const users = [
 
 async function seed() {
   try {
-    await mongoose.connect(MONGO_URI);
-    console.log('Connected to MongoDB');
+    console.log('Connected to MySQL');
 
     for (const userData of users) {
       let user = await User.findOne({ email: userData.email }).select('+password');
@@ -112,10 +110,11 @@ async function seed() {
     console.log('Member:  ram@example.com');
     console.log('Passwords come from your local Backend/.env seed variables.');
     console.log('========================================');
-    process.exit(0);
   } catch (err) {
     console.error('Seeder error:', err.message);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    await pool.end().catch(() => {});
   }
 }
 

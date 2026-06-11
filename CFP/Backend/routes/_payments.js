@@ -1,7 +1,6 @@
 const express = require('express');
 const axios = require('axios');
-const mongoose = require('mongoose');
-const { Payment, ManualPayment } = require('../models/models');
+const { Payment, ManualPayment, PaymentSetting } = require('../models/models');
 const User = require('../models/User');
 const { protect, authorize } = require('../middleware/auth');
 const { sendMembershipActivatedNotification } = require('../utils/notifications');
@@ -41,15 +40,6 @@ const defaultQrMethods = {
     isActive: true,
   },
 };
-
-const PaymentSettingSchema = new mongoose.Schema({
-  key: { type: String, required: true, unique: true },
-  methods: { type: Object, default: {} },
-  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-}, { timestamps: true });
-
-const PaymentSetting = mongoose.models.PaymentSetting ||
-  mongoose.model('PaymentSetting', PaymentSettingSchema);
 
 function validateImageData(imageData) {
   if (!imageData) return null;
@@ -631,7 +621,7 @@ payRouter.post('/qr/:gateway', protect, authorize('admin'), async (req, res) => 
       return res.status(400).json({ success: false, message: imageError });
     }
 
-    const current = await PaymentSetting.findOne({ key: QR_SETTINGS_KEY }).lean();
+    const current = await PaymentSetting.findOne({ key: QR_SETTINGS_KEY });
     const methods = mergeQrMethods(current?.methods);
     methods[method] = {
       ...methods[method],
@@ -664,7 +654,7 @@ payRouter.get('/qr/:gateway', async (req, res) => {
   const method = legacyQrMethodMap[gateway];
   if (!method) return res.status(404).json({ success: false, message: 'Unknown gateway' });
 
-  const setting = await PaymentSetting.findOne({ key: QR_SETTINGS_KEY }).lean();
+  const setting = await PaymentSetting.findOne({ key: QR_SETTINGS_KEY });
   const methods = mergeQrMethods(setting?.methods);
   const qr = methods[method];
 

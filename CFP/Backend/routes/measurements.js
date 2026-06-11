@@ -1,15 +1,11 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const router = express.Router();
 const User = require('../models/User');
 const { Measurement } = require('../models/models');
 const { protect, authorize } = require('../middleware/auth');
+const { isValidPublicId } = require('../db/helpers');
 
 const measurementFields = ['height', 'weight', 'forearms', 'biceps', 'chest', 'abdomen', 'thighs', 'calves'];
-
-function isValidObjectId(value) {
-  return mongoose.Types.ObjectId.isValid(String(value || ''));
-}
 
 function parseOptionalNumber(value) {
   if (value === undefined || value === null || value === '') return undefined;
@@ -48,7 +44,7 @@ function buildMeasurementPayload(body = {}, user) {
 
 async function assertMemberAccess(req, memberId) {
   if (!memberId) return false;
-  if (!isValidObjectId(memberId)) return false;
+  if (!isValidPublicId(memberId)) return false;
   if (req.user.role === 'member') return String(req.user.id) === String(memberId);
   return ['admin', 'trainer'].includes(req.user.role);
 }
@@ -60,7 +56,7 @@ router.get('/', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'memberId is required' });
     }
 
-    if (!isValidObjectId(memberId)) {
+    if (!isValidPublicId(memberId)) {
       return res.status(400).json({ success: false, message: 'memberId is invalid' });
     }
 
@@ -86,7 +82,7 @@ router.post('/', protect, authorize('admin', 'trainer'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'Member is required' });
     }
 
-    if (!isValidObjectId(req.body.member)) {
+    if (!isValidPublicId(req.body.member)) {
       return res.status(400).json({ success: false, message: 'Member is invalid' });
     }
 
@@ -100,7 +96,7 @@ router.post('/', protect, authorize('admin', 'trainer'), async (req, res) => {
     }
 
     if (req.body.trainer) {
-      if (!isValidObjectId(req.body.trainer)) {
+      if (!isValidPublicId(req.body.trainer)) {
         return res.status(400).json({ success: false, message: 'Trainer is invalid' });
       }
 
@@ -134,7 +130,7 @@ router.post('/', protect, authorize('admin', 'trainer'), async (req, res) => {
 
 router.put('/:id', protect, authorize('admin', 'trainer'), async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) {
+    if (!isValidPublicId(req.params.id)) {
       return res.status(400).json({ success: false, message: 'Measurement is invalid' });
     }
 
@@ -144,7 +140,7 @@ router.put('/:id', protect, authorize('admin', 'trainer'), async (req, res) => {
     }
 
     if (req.body.trainer) {
-      if (!isValidObjectId(req.body.trainer)) {
+      if (!isValidPublicId(req.body.trainer)) {
         return res.status(400).json({ success: false, message: 'Trainer is invalid' });
       }
 
@@ -175,7 +171,7 @@ router.put('/:id', protect, authorize('admin', 'trainer'), async (req, res) => {
 
 router.delete('/:id', protect, authorize('admin', 'trainer'), async (req, res) => {
   try {
-    if (!isValidObjectId(req.params.id)) {
+    if (!isValidPublicId(req.params.id)) {
       return res.status(400).json({ success: false, message: 'Measurement is invalid' });
     }
 
