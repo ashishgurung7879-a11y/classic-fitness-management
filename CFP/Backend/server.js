@@ -3,18 +3,15 @@
 //  Clean fresh backend — Port 5000
 // ═══════════════════════════════════════════════
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 const { apiLimiter, sanitize, securityHeaders } = require('./middleware/security');
-const User = require('./models/User');
+const { healthCheck } = require('./db/mysql');
 
 const app = express();
 app.set('trust proxy', 1);
-mongoose.set('sanitizeFilter', true);
-mongoose.set('strictQuery', true);
 const defaultFrontendOrigins = [
   'http://127.0.0.1:5500',
   'http://localhost:5500',
@@ -99,21 +96,12 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // ── DATABASE ──────────────────────────────────
-const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/classic_fitness_park';
-mongoose.connect(MONGO_URI)
-  .then(async () => {
-    console.log(' MongoDB Connected:', MONGO_URI.replace(/\/\/.*@/, '//***@'));
-    try {
-      await User.syncIndexes();
-      console.log(' User indexes synced');
-    } catch (indexErr) {
-      console.error(' User index sync warning:', indexErr.message);
-    }
-  })
-  .catch(err => {
-    console.error(' MongoDB Error:', err.message);
-    console.log(' Make sure MongoDB is running: services.msc → MongoDB Server → Start');
-  });
+async function ensureDatabaseReady() {
+  const healthy = await healthCheck();
+  if (!healthy) {
+    throw new Error('MySQL health check failed');
+  }
+}
 
 // ── ROUTES ────────────────────────────────────
 const authRouter = require('./routes/auth');
@@ -151,16 +139,30 @@ app.use('/api/payment-settings', paymentSettingsRouter);
 app.use('/api/measurements', measurementsRouter);
 
 // ── HEALTH CHECK ─────────────────────────────
-app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    message: ' Classic Fitness Park API is Running!',
-    gym: 'Classic Fitness Park',
-    location: 'Kakarvitta, Jhapa, Nepal',
-    version: '3.0.0',
-    mongodb: mongoose.connection.readyState === 1 ? ' Connected' : ' Disconnected',
-    time: new Date().toISOString()
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    await ensureDatabaseReady();
+    res.json({
+      success: true,
+      message: ' Classic Fitness Park API is Running!',
+      gym: 'Classic Fitness Park',
+      location: 'Kakarvitta, Jhapa, Nepal',
+      version: '3.0.0',
+      mysql: ' Connected',
+      time: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(503).json({
+      success: false,
+      message: ' Classic Fitness Park API database health check failed',
+      gym: 'Classic Fitness Park',
+      location: 'Kakarvitta, Jhapa, Nepal',
+      version: '3.0.0',
+      mysql: ' Disconnected',
+      error: err.message,
+      time: new Date().toISOString()
+    });
+  }
 });
 
 app.get(['/', '/index.html'], (req, res) => {
@@ -200,6 +202,11 @@ app.use((err, req, res, next) => {
 
 // ── START SERVER ──────────────────────────────
 const PORT = process.env.PORT || 5000;
+async function startServer() {
+  try {
+    await ensureDatabaseReady();
+    console.log(' MySQL Connected');
+
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('\n══════════════════════════════════════');
   console.log('  CLASSIC FITNESS PARK v3.0');
@@ -218,5 +225,14 @@ server.on('error', (err) => {
   console.error('Server failed to start:', err.message);
   process.exit(1);
 });
+
+  } catch (err) {
+    console.error(' MySQL Error:', err.message);
+    console.log(' Make sure MySQL is running and Backend/.env has the correct MYSQL_* settings.');
+    process.exit(1);
+  }
+}
+
+startServer();
 
 module.exports = app;

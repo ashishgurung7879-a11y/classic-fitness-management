@@ -47,32 +47,50 @@ function normalizeProductPayload(body = {}) {
 }
 
 // ── GET all products (public) ─────────────────────────────────
+// GET all products (public)
 r.get('/', async (req, res) => {
   try {
     const { cat, search } = req.query;
-    const q = { $or: [{ isActive: true }, { isActive: { $exists: false } }] };
-    if (cat && cat !== 'all') q.category = cat;
-    if (search) q.name = { $regex: search, $options: 'i' };
-    const products = await Product.collection.find(q).sort({ createdAt: -1 }).toArray();
-    console.info('[GET /api/products] returning', products.length, 'active products');
-    res.json({ success: true, products });
+
+    const q = {
+      $or: [
+        { isActive: true },
+        { isActive: { $exists: false } }
+      ]
+    };
+
+    if (cat && cat !== 'all') {
+      q.category = cat;
+    }
+
+    if (search) {
+      q.name = { $regex: search, $options: 'i' };
+    }
+
+    const products = await Product.find(q);
+
+    products.sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    console.info(
+      '[GET /api/products] returning',
+      products.length,
+      'active products'
+    );
+
+    res.json({
+      success: true,
+      products
+    });
   } catch (err) {
     console.error('[GET /api/products] error', err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 });
-
-r.get('/admin/all', protect, authorize('admin'), async (req, res) => {
-  try {
-    const products = await Product.find({}).sort({ createdAt: -1 });
-    console.info('[GET /api/products/admin/all] returning', products.length, 'products for admin');
-    res.json({ success: true, products });
-  } catch (err) {
-    console.error('[GET /api/products/admin/all] error', err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
 // ── GET single product (public) ───────────────────────────────
 r.get('/:id', async (req, res) => {
   try {

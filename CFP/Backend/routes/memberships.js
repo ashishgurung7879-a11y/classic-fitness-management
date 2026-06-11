@@ -4,9 +4,9 @@ const r = express.Router();
 const { protect } = require('../middleware/auth');
 
 const PLANS = [
-  { id: 'starter', name: 'Starter', price: 1500, yearlyPrice: 1200, features: ['Full Gym Access', '2 Group Classes/Week', 'Locker Room', 'Fitness Assessment'], excluded: ['Personal Trainer', 'Nutrition Plan', 'Spa Access'] },
-  { id: 'pro', name: 'Pro', price: 2800, yearlyPrice: 2240, features: ['Full Gym Access', 'Unlimited Classes', 'Locker + Towel', 'Monthly Assessment', '2 PT Sessions/Month', 'Basic Nutrition Plan'], excluded: ['Spa Access'] },
-  { id: 'elite', name: 'Elite', price: 5000, yearlyPrice: 4000, features: ['24/7 Gym Access', 'Unlimited Classes', 'Premium Locker', 'Weekly Assessment', 'Unlimited PT Sessions', 'Custom Nutrition Plan', 'Spa & Sauna Access'], excluded: [] }
+  { id: 'starter', name: 'Starter', price: 1500, yearlyPrice: 18000, features: , excluded: },
+  { id: 'pro', name: 'Pro', price: 4500, yearlyPrice: 2240, features: },
+  { id: 'elite', name: 'Elite', price: 18000, yearlyPrice: 18000, features: [  ], excluded: [] }
 ];
 
 r.get('/', (req, res) => res.json({ success: true, plans: PLANS }));
