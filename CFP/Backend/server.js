@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════
 //  CLASSIC FITNESS PARK — BACKEND v3.0
-//  Clean fresh backend — Port 5000
+//   backend — Port 5000
 // ═══════════════════════════════════════════════
 const express = require('express');
 const cors = require('cors');
