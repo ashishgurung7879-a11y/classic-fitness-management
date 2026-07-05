@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import SiteMeta from '../components/SiteMeta';
 import PasswordInput from '../components/PasswordInput';
-import { adminApi, clearSession, fileToDataUrl, setSession } from '../utils/api';
+import {
+  API_URL,
+  adminApi,
+  clearSession,
+  fileToDataUrl,
+  setSession,
+} from '../utils/api';
 import { useToast } from '../context/ToastContext';
 
 const tabs = [
@@ -366,46 +372,51 @@ export default function AdminPortal() {
     }
   }
 
-  async function handleLogin(event) {
-    event.preventDefault();
+    async function handleLogin(event) {
+      event.preventDefault();
 
-    const submittedForm = new FormData(event.currentTarget);
-    const identifier = String(submittedForm.get('identifier') || loginForm.identifier || '').trim();
-    const password = String(submittedForm.get('password') || loginForm.password || '');
+      const submittedForm = new FormData(event.currentTarget);
+      const identifier = String(submittedForm.get('identifier') || loginForm.identifier || '').trim();
+      const password = String(submittedForm.get('password') || loginForm.password || '');
 
-    if (identifier !== loginForm.identifier || password !== loginForm.password) {
-      setLoginForm({ identifier, password });
+      if (identifier !== loginForm.identifier || password !== loginForm.password) {
+        setLoginForm({ identifier, password });
+      }
+
+      if (!identifier || !password) {
+        showToast('Enter your admin phone or email and password.');
+        return;
+      }
+      setBusy(true);
+      try {
+        const { ok, data } = await adminApi('/auth/login', {
+          method: 'POST',
+          body: { identifier, password },
+        });
+
+        if (!ok) {
+          showToast(data.message || 'Login failed.');
+          return;
+        }
+
+        if (data.user?.role !== 'admin') {
+          showToast('This account is not an admin account.');
+          return;
+        }
+
+        setSession('admin', data.token, data.user);
+        setAdminUser(data.user);
+        setLoginForm({ identifier: '', password: '' });
+        setView('app');
+        await refreshAll(false);
+        showToast(`Welcome back, ${data.user.firstName}.`);
+      } catch (err) {
+        console.error('Login error:', err);
+        showToast('Could not reach the server. Please check your connection and try again.');
+      } finally {
+        setBusy(false);
+      }
     }
-
-    if (!identifier || !password) {
-      showToast('Enter your admin phone or email and password.');
-      return;
-    }
-
-    setBusy(true);
-    const { ok, data } = await adminApi('/auth/login', {
-      method: 'POST',
-      body: { identifier, password },
-    });
-    setBusy(false);
-
-    if (!ok) {
-      showToast(data.message || 'Login failed.');
-      return;
-    }
-
-    if (data.user?.role !== 'admin') {
-      showToast('This account is not an admin account.');
-      return;
-    }
-
-    setSession('admin', data.token, data.user);
-    setAdminUser(data.user);
-    setLoginForm({ identifier: '', password: '' });
-    setView('app');
-    await refreshAll(false);
-    showToast(`Welcome back, ${data.user.firstName}.`);
-  }
 
   function logout() {
     clearSession('admin');

@@ -17,18 +17,7 @@ function normalizePhone(value) {
   return digits;
 }
 
-function getDuplicateField(err) {
-  if (!err) return '';
-  const keyPatternField = Object.keys(err.keyPattern || {})[0];
-  if (keyPatternField) return keyPatternField;
-  const keyValueField = Object.keys(err.keyValue || {})[0];
-  if (keyValueField) return keyValueField;
-  const match = err.message && err.message.match(/index:\s+([a-zA-Z0-9_]+)_1/i);
-  return match ? match[1] : '';
-}
-
 module.exports = {
   normalizeOptionalEmail,
-  normalizePhone,
-  getDuplicateField
+  normalizePhone
 };

@@ -1,12 +1,37 @@
-import React, { useState } from 'react';
-
-const PHOTOS = Array.from({ length: 12 }, (_, index) => ({
-  src: `gym-photos/gym-${String(index + 1).padStart(2, '0')}.jpeg`,
-  alt: `Classic Fitness Park photo ${index + 1}`,
-}));
+import React, { useEffect, useState } from 'react';
+import { publicApi } from '../utils/api';
 
 export default function GallerySection() {
   const [active, setActive] = useState(null);
+  const [photos, setPhotos] = useState([]);
+  const [apiLoaded, setApiLoaded] = useState(false);
+  const [apiError, setApiError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPhotos() {
+      const { ok, data } = await publicApi('/gallery');
+      if (cancelled) return;
+
+      if (!ok) {
+        setPhotos([]);
+        setApiLoaded(true);
+        setApiError(true);
+        return;
+      }
+
+      setPhotos(Array.isArray(data.photos) ? data.photos : []);
+      setApiLoaded(true);
+      setApiError(false);
+    }
+
+    loadPhotos();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section className="gallery" id="gallery">
@@ -17,10 +42,16 @@ export default function GallerySection() {
           <p>Real photos from our actual gym in Kakarvitta, Jhapa</p>
         </div>
 
+        {apiError ? <p className="shop-note">Gallery could not be loaded because the backend could not be reached.</p> : null}
+
         <div className="gallery-grid">
-          {PHOTOS.map(({ src, alt }, index) => (
-            <button key={index} type="button" className="gallery-item" onClick={() => setActive(src)}>
-              <img src={src} alt={alt} loading="lazy" />
+          {apiLoaded && photos.length === 0 ? (
+            <div className="shop-empty" style={{ gridColumn: '1 / -1' }}>
+              {apiError ? 'Gallery is unavailable right now.' : 'No gallery photos available.'}
+            </div>
+          ) : photos.map(({ imageUrl, title }, index) => (
+            <button key={imageUrl || index} type="button" className="gallery-item" onClick={() => setActive(imageUrl)}>
+              <img src={imageUrl} alt={title || `Classic Fitness Park photo ${index + 1}`} loading="lazy" />
               <div className="gallery-overlay"><span>View</span></div>
             </button>
           ))}

@@ -71,19 +71,6 @@ function omitUndefined(input) {
   );
 }
 
-function mongoSortToSql(sort = {}, fieldMap = {}) {
-  const entries = Object.entries(sort || {});
-  if (!entries.length) return '';
-  const clauses = entries
-    .map(([field, direction]) => {
-      const column = fieldMap[field];
-      if (!column) return null;
-      return `${column} ${Number(direction) < 0 ? 'DESC' : 'ASC'}`;
-    })
-    .filter(Boolean);
-  return clauses.length ? ` ORDER BY ${clauses.join(', ')}` : '';
-}
-
 module.exports = {
   generatePublicId,
   publicId,
@@ -96,6 +83,5 @@ module.exports = {
   nullableString,
   parseJson,
   stringifyJson,
-  omitUndefined,
-  mongoSortToSql,
+  omitUndefined
 };

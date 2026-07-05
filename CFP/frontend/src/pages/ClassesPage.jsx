@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PublicPageShell from '../components/PublicPageShell';
 import PageHero from '../components/PageHero';
@@ -6,11 +6,27 @@ import ClassesSection from '../sections/ClassesSection';
 import BMISection from '../sections/BMISection';
 import NutritionSection from '../sections/NutritionSection';
 import BookingModal from '../modals/BookingModal';
+import { publicApi } from '../utils/api';
 
 export default function ClassesPage() {
   const navigate = useNavigate();
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingClass, setBookingClass] = useState('');
+  const [schedulePreview, setSchedulePreview] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    publicApi('/classes').then(({ ok, data }) => {
+      if (cancelled || !ok) return;
+      const classes = Array.isArray(data.classes) ? data.classes : [];
+      setSchedulePreview(classes.filter((item) => item?.schedule?.startTime).slice(0, 3));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function openBooking(className) {
     setBookingClass(className);
@@ -36,16 +52,19 @@ export default function ClassesPage() {
           { label: 'Weekly Rhythm', value: '20+ Sessions', note: 'Strength, cardio, mobility and more.' },
           { label: 'Best For', value: 'All Levels', note: 'From beginners to serious athletes.' },
         ]}
-        aside={(
+        aside={schedulePreview.length > 0 ? (
           <div className="page-schedule-card">
-            <span className="page-spotlight-kicker">Popular Blocks</span>
+            <span className="page-spotlight-kicker">Scheduled Classes</span>
             <div className="page-schedule-list">
-              <div><strong>Morning Power</strong><span>6:00 AM - 8:00 AM</span></div>
-              <div><strong>Midday Conditioning</strong><span>10:00 AM - 11:00 AM</span></div>
-              <div><strong>Evening Burn</strong><span>5:00 PM - 7:00 PM</span></div>
+              {schedulePreview.map((item) => (
+                <div key={item._id || item.id || item.name}>
+                  <strong>{item.name || item.title || 'Class'}</strong>
+                  <span>{[item.schedule?.startTime, item.schedule?.endTime].filter(Boolean).join(' - ')}</span>
+                </div>
+              ))}
             </div>
           </div>
-        )}
+        ) : null}
       />
       <ClassesSection onBook={openBooking} />
       <BMISection />

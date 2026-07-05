@@ -14,10 +14,10 @@ export default function BMISection() {
     let bmi = unit === 'metric' ? w / ((h / 100) ** 2) : (703 * w) / (h ** 2);
     bmi = parseFloat(bmi.toFixed(1));
     let status, color, pos;
-    if (bmi < 18.5)    { status = '⬇️ Underweight';  color = '#3498db'; pos = 5; }
-    else if (bmi < 25) { status = '✅ Normal Weight'; color = '#2ecc71'; pos = 30; }
-    else if (bmi < 30) { status = '⚠️ Overweight';   color = '#f39c12'; pos = 60; }
-    else               { status = '🔴 Obese';         color = '#e74c3c'; pos = 88; }
+    if (bmi < 18.5)    { status = ' Underweight';  color = '#3498db'; pos = 5; }
+    else if (bmi < 25) { status = ' Normal Weight'; color = '#2ecc71'; pos = 30; }
+    else if (bmi < 30) { status = ' Overweight';   color = '#f39c12'; pos = 60; }
+    else               { status = ' Obese';         color = '#e74c3c'; pos = 88; }
     setResult({ bmi, status, color, pos });
   };
 
@@ -64,7 +64,7 @@ export default function BMISection() {
 
             {/* Gender */}
             <div style={{ display:'flex', gap:'1rem', marginBottom:'1rem' }}>
-              {[['male','👨 Male'],['female','👩 Female']].map(([val, lbl]) => (
+              {[['male',' Male'],['female',' Female']].map(([val, lbl]) => (
                 <button key={val} onClick={() => setGender(val)}
                   className={`gender-btn${gender===val ? ' active' : ''}`}
                   style={{ flex:1, padding:'0.8rem', borderRadius:'8px', cursor:'pointer', border:'1px solid rgba(255,255,255,0.1)', background: gender===val ? 'rgba(204,0,0,0.1)' : 'rgba(255,255,255,0.05)', color:'var(--white)' }}>

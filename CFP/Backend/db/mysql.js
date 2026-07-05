@@ -1,43 +1,7 @@
 const mysql = require('mysql2/promise');
+const { buildDatabaseConfig, getSafeDatabaseConfig } = require('../config/database');
 
-function buildConfig() {
-  if (process.env.MYSQL_URL) {
-    const parsed = new URL(process.env.MYSQL_URL);
-    return {
-      host: parsed.hostname,
-      port: parsed.port ? Number(parsed.port) : 3306,
-      user: decodeURIComponent(parsed.username || ''),
-      password: decodeURIComponent(parsed.password || ''),
-      database: parsed.pathname.replace(/^\/+/, ''),
-      waitForConnections: true,
-      connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10),
-      queueLimit: 0,
-      namedPlaceholders: false,
-      decimalNumbers: true,
-      ssl: process.env.MYSQL_SSL === 'true' || parsed.searchParams.get('ssl') === 'true'
-        ? { rejectUnauthorized: process.env.MYSQL_SSL_REJECT_UNAUTHORIZED !== 'false' }
-        : undefined,
-    };
-  }
-
-  return {
-    host: process.env.MYSQL_HOST || '127.0.0.1',
-    port: Number(process.env.MYSQL_PORT || 3306),
-    user: process.env.MYSQL_USER || 'root',
-    password: process.env.MYSQL_PASSWORD || '',
-    database: process.env.MYSQL_DATABASE || 'classic_fitness_park',
-    waitForConnections: true,
-    connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10),
-    queueLimit: 0,
-    namedPlaceholders: false,
-    decimalNumbers: true,
-    ssl: process.env.MYSQL_SSL === 'true'
-      ? { rejectUnauthorized: process.env.MYSQL_SSL_REJECT_UNAUTHORIZED !== 'false' }
-      : undefined,
-  };
-}
-
-const pool = mysql.createPool(buildConfig());
+const pool = mysql.createPool(buildDatabaseConfig());
 
 async function query(sql, params = []) {
   const [rows] = await pool.execute(sql, params);
@@ -64,6 +28,20 @@ async function healthCheck() {
   return rows[0]?.ok === 1;
 }
 
+function logDatabaseConfig() {
+  console.log('MySQL diagnostics:', getSafeDatabaseConfig());
+}
+
+function formatDatabaseError(err) {
+  return {
+    message: err.message,
+    code: err.code,
+    errno: err.errno,
+    sqlState: err.sqlState,
+    sqlMessage: err.sqlMessage,
+  };
+}
+
 function isDuplicateError(err) {
   return err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062;
 }
@@ -81,6 +59,8 @@ module.exports = {
   query,
   transaction,
   healthCheck,
+  logDatabaseConfig,
+  formatDatabaseError,
   isDuplicateError,
   getDuplicateField,
 };

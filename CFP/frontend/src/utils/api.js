@@ -25,8 +25,12 @@ export function getApiBaseUrl() {
       return 'http://localhost:5000/api';
     }
   }
+if (isLocalHost) {
+  return 'http://localhost:5000/api';
+}
 
-  return isLocalHost ? `${window.location.origin}/api` : `${window.location.origin}/api`;
+// Production backend
+return 'https://classicfitnesspark.com/api';
 }
 
 export const API_URL = getApiBaseUrl();

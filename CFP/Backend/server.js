@@ -1,101 +1,43 @@
-// ═══════════════════════════════════════════════
-//  CLASSIC FITNESS PARK — BACKEND v3.0
-//   backend — Port 5000
-// ═══════════════════════════════════════════════
+// Classic Fitness Park backend v3.0
+// API server for cPanel Node.js hosting.
 const express = require('express');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
-require('dotenv').config();
-const { apiLimiter, sanitize, securityHeaders } = require('./middleware/security');
-const { healthCheck } = require('./db/mysql');
+const {
+  getAllowedOrigins,
+  getBooleanEnv,
+  getNumberEnv,
+  getTrimmedEnv,
+  logEnvironmentDiagnostics,
+  validateEnvironment,
+} = require('./config/env');
+
+const PORT = getNumberEnv('PORT', 5000);
+const NODE_ENV = getTrimmedEnv('NODE_ENV', 'development');
+
+// Validate environment values before DB-backed modules create a pool.
+validateEnvironment();
+
+const { formatDatabaseError, healthCheck, logDatabaseConfig } = require('./db/mysql');
+const {
+  applyCoreMiddleware,
+  applyErrorHandler,
+  applyFrontendStaticFiles,
+  applyNotFoundHandler,
+  applyRequestLogging,
+} = require('./middleware');
+const registerApiRoutes = require('./routes');
 
 const app = express();
-app.set('trust proxy', 1);
-const defaultFrontendOrigins = [
-  'http://127.0.0.1:5500',
-  'http://localhost:5500',
-  'http://localhost:8080',
-  'http://127.0.0.1:8080',
-  'http://localhost:4173',
-  'http://127.0.0.1:4173',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:5000',
-  'http://127.0.0.1:5000'
-];
-const configuredOrigins = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(origin => origin.trim()).filter(Boolean) : [];
-const allowedOrigins = Array.from(new Set([...configuredOrigins, ...defaultFrontendOrigins]));
 
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  console.error(' Missing or weak JWT_SECRET. Create Backend/.env from Backend/.env.example and set a strong secret.');
-  process.exit(1);
+if (NODE_ENV !== 'production' || getBooleanEnv('DEBUG_ENV', false)) {
+  logEnvironmentDiagnostics();
+  logDatabaseConfig();
 }
 
-// ── MIDDLEWARE ────────────────────────────────
-app.use(securityHeaders);
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+// Middleware
+applyCoreMiddleware(app, getAllowedOrigins());
+applyRequestLogging(app, NODE_ENV);
 
-  if (origin === 'null') {
-    res.setHeader('Access-Control-Allow-Origin', 'null');
-    res.vary('Origin');
-  } else if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.vary('Origin');
-  }
-
-  next();
-});
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || origin === 'null') {
-      return callback(null, true);
-    }
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, origin);
-    }
-    return callback(new Error(`CORS blocked for origin: ${origin}`));
-  },
-  credentials: true
-}));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use(sanitize);
-app.use('/api', (req, res, next) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  next();
-});
-app.use('/api', apiLimiter);
-
-// Serve frontend pages from the backend host as well.
-// Vite's `public/` files are requested from the web root, so we need to
-// expose that directory explicitly when serving the raw frontend source.
-const frontendSourcePath = path.join(__dirname, '../frontend');
-const frontendDistPath = path.join(frontendSourcePath, 'dist');
-const frontendPublicPath = path.join(frontendSourcePath, 'public');
-const frontendGymPhotosPath = path.join(frontendSourcePath, 'gym-photos');
-const hasBuiltFrontend = fs.existsSync(path.join(frontendDistPath, 'index.html'));
-const frontendPath = hasBuiltFrontend ? frontendDistPath : frontendSourcePath;
-const frontendIndexPath = path.join(frontendPath, 'index.html');
-
-app.use(express.static(frontendPath));
-app.use('/gym-photos', express.static(frontendGymPhotosPath));
-if (!hasBuiltFrontend) {
-  app.use(express.static(frontendPublicPath));
-}
-
-// Log all requests in dev
-if (process.env.NODE_ENV !== 'production') {
-  app.use((req, res, next) => {
-    console.log(`${req.method} ${req.path}`);
-    next();
-  });
-}
-
-// ── DATABASE ──────────────────────────────────
+// Database
 async function ensureDatabaseReady() {
   const healthy = await healthCheck();
   if (!healthy) {
@@ -103,136 +45,77 @@ async function ensureDatabaseReady() {
   }
 }
 
-// ── ROUTES ────────────────────────────────────
-const authRouter = require('./routes/auth');
-const membersRouter = require('./routes/members');
-const bookingsRouter = require('./routes/bookings');
-const payRouter = require('./routes/payments');        // ← was never mounted!
-const trainersRouter = require('./routes/trainers');
-const productsRouter = require('./routes/products');
-const galleryRouter = require('./routes/gallery');
-const classesRouter = require('./routes/classes');
-const manualPaymentsRouter = require('./routes/manualPayments');
-const contactRouter = require('./routes/contact');
-const noticesRouter = require('./routes/notices');
-const notificationsRouter = require('./routes/notifications');
-const dashboardRouter = require('./routes/dashboard');
-const paymentSettingsRouter = require('./routes/paymentSettings');
-const measurementsRouter = require('./routes/measurements');
-const { attendanceRouter } = require('./routes/attendance');
+// Routes
+registerApiRoutes(app);
 
-app.use('/api/auth', authRouter);
-app.use('/api/members', membersRouter);
-app.use('/api/bookings', bookingsRouter);
-app.use('/api/attendance', attendanceRouter);
-app.use('/api/payments', payRouter);          // ← CRITICAL: was missing
-app.use('/api/notifications', notificationsRouter);
-app.use('/api/trainers', trainersRouter);
-app.use('/api/products', productsRouter);
-app.use('/api/gallery', galleryRouter);
-app.use('/api/classes', classesRouter);
-app.use('/api/manual-payments', manualPaymentsRouter);
-app.use('/api/dashboard', dashboardRouter);
-app.use('/api/contact', contactRouter);
-app.use('/api/notices', noticesRouter);
-app.use('/api/payment-settings', paymentSettingsRouter);
-app.use('/api/measurements', measurementsRouter);
-
-// ── HEALTH CHECK ─────────────────────────────
+// Health check
 app.get('/api/health', async (req, res) => {
   try {
     await ensureDatabaseReady();
     res.json({
       success: true,
-      message: ' Classic Fitness Park API is Running!',
+      message: 'Classic Fitness Park API is running.',
       gym: 'Classic Fitness Park',
       location: 'Kakarvitta, Jhapa, Nepal',
       version: '3.0.0',
-      mysql: ' Connected',
-      time: new Date().toISOString()
+      mysql: 'Connected',
+      time: new Date().toISOString(),
     });
   } catch (err) {
     res.status(503).json({
       success: false,
-      message: ' Classic Fitness Park API database health check failed',
+      message: 'Classic Fitness Park API database health check failed.',
       gym: 'Classic Fitness Park',
       location: 'Kakarvitta, Jhapa, Nepal',
       version: '3.0.0',
-      mysql: ' Disconnected',
-      error: err.message,
-      time: new Date().toISOString()
+      mysql: 'Disconnected',
+      error: NODE_ENV === 'production'
+        ? { message: 'Database unavailable', code: err.code || 'DB_HEALTH_CHECK_FAILED' }
+        : formatDatabaseError(err),
+      time: new Date().toISOString(),
     });
   }
 });
 
-app.get(['/', '/index.html'], (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.sendFile(frontendIndexPath);
-});
+applyFrontendStaticFiles(app);
 
-// Route all non-API, extensionless requests to the React app so
-// BrowserRouter pages such as /about or /membership work on refresh too.
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    return next();
-  }
+// 404
+applyNotFoundHandler(app);
 
-  if (path.extname(req.path)) {
-    return next();
-  }
+// Error handler
+applyErrorHandler(app);
 
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.sendFile(frontendIndexPath);
-});
-
-// ── 404 ──────────────────────────────────────
-app.use('*', (req, res) => {
-  res.status(404).json({ success: false, message: `Route not found: ${req.originalUrl}` });
-});
-
-// ── ERROR HANDLER ─────────────────────────────
-app.use((err, req, res, next) => {
-  console.error('Server Error:', err.stack);
-  res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Server Error' });
-});
-
-// ── START SERVER ──────────────────────────────
-const PORT = process.env.PORT || 5000;
-async function startServer() {
+async function logStartupDatabaseState() {
   try {
     await ensureDatabaseReady();
-    console.log(' MySQL Connected');
-
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log('\n══════════════════════════════════════');
-  console.log('  CLASSIC FITNESS PARK v3.0');
-  console.log(' Kakarvitta, Jhapa, Nepal');
-  console.log(` http://localhost:${PORT}/api`);
-  console.log(` http://localhost:${PORT}/api/health`);
-  console.log('══════════════════════════════════════\n');
-});
-
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use. Stop the other server or change PORT in Backend/.env.`);
-    process.exit(1);
-  }
-
-  console.error('Server failed to start:', err.message);
-  process.exit(1);
-});
-
+    console.log('MySQL connection verified.');
   } catch (err) {
-    console.error(' MySQL Error:', err.message);
-    console.log(' Make sure MySQL is running and Backend/.env has the correct MYSQL_* settings.');
-    process.exit(1);
+    console.error('MySQL health check failed at startup:', formatDatabaseError(err));
+    console.error('Server is still running. Fix the MySQL credentials/grants, then check /api/health.');
   }
 }
 
-startServer();
+async function startServer() {
+  await logStartupDatabaseState();
+
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Classic Fitness Park API listening on port ${PORT}`);
+    console.log(`Health check: http://localhost:${PORT}/api/health`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Stop the other server or change PORT.`);
+      process.exit(1);
+    }
+
+    console.error('Server failed to start:', err.message);
+    process.exit(1);
+  });
+}
+
+if (require.main === module) {
+  startServer();
+}
 
 module.exports = app;

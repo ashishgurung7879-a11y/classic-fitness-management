@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export default function HeroSection({ stats }) {
+export default function HeroSection({ stats, galleryPreview = [] }) {
   const particlesRef = useRef(null);
   const navigate = useNavigate();
 
@@ -52,26 +52,25 @@ export default function HeroSection({ stats }) {
           <div className="stat-div"></div>
           <StatItem value={stats.trainers} label="Trainers" />
           <div className="stat-div"></div>
-          <StatItem value={20} label="Classes/Week" />
-          <div className="stat-div"></div>
-          <StatItem value={stats.years} label="Years Strong" />
+          <StatItem value={stats.classes} label="Classes" />
         </div>
 
-        <div className="hero-real-strip">
-          {[
-            { img: 'gym-photos/gym-01.jpeg', alt: 'Cardio zone', title: 'Real Cardio Floor', sub: 'Sunlit treadmills and bikes' },
-            { img: 'gym-photos/gym-05.jpeg', alt: 'Strength area', title: 'Strength Zone', sub: 'Bench, racks and functional space' },
-            { img: 'gym-photos/gym-04.jpeg', alt: 'Trainer coaching', title: 'Hands-On Coaching', sub: 'Focused trainer support' },
-          ].map(({ img, alt, title, sub }) => (
-            <article key={title} className="hero-real-card">
-              <img src={img} alt={alt} />
-              <div className="hero-real-copy">
-                <strong>{title}</strong>
-                <span>{sub}</span>
-              </div>
-            </article>
-          ))}
-        </div>
+        {galleryPreview.length > 0 ? (
+          <div className="hero-real-strip">
+            {galleryPreview.map((photo, index) => {
+              const title = photo.title || `Gallery photo ${index + 1}`;
+              return (
+                <article key={photo._id || photo.id || photo.imageUrl || title} className="hero-real-card">
+                  <img src={photo.imageUrl} alt={title} />
+                  <div className="hero-real-copy">
+                    <strong>{title}</strong>
+                    {photo.category ? <span>{photo.category}</span> : null}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
 
       <div className="hero-scroll">

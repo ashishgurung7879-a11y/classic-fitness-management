@@ -1,15 +1,17 @@
 {
   "name": "cfp-backend",
   "version": "3.0.0",
-  "description": "Classic Fitness Park Backend - Fresh Install",
+  "description": "Classic Fitness Park Backend",
   "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "seed": "node utils/seeder.js",
-    "backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-mongodb.ps1",
-    "mysql:inspect-mongo": "node scripts/mysql-migration/inspect-mongodb-schema.js",
-    "mysql:migrate": "node scripts/mysql-migration/migrate-mongo-to-mysql.js"
+    "check:cpanel": "node scripts/check-cpanel-config.js",
+    "check:cpanel:db": "node scripts/check-cpanel-config.js --db",
+    "seed": "node utils/seeder.js"
   },
   "dependencies": {
     "axios": "^1.6.2",
@@ -20,8 +22,6 @@
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
-    "multer": "^1.4.5-lts.1",
     "mysql2": "^3.22.5"
   },
   "devDependencies": {

@@ -50,7 +50,7 @@ const shop = readFrontend('src/sections/ShopSection.jsx');
 
 const trainersRoute = readBackend('routes/trainers.js');
 const productsRoute = readBackend('routes/products.js');
-const server = readBackend('server.js');
+const middleware = readBackend('middleware/index.js');
 
 [
   'User.collection.find',
@@ -60,14 +60,16 @@ const server = readBackend('server.js');
 ].forEach((token) => assertContains(trainersRoute, token, 'routes/trainers.js'));
 
 [
-  'Product.collection.find',
-  "$or: [{ isActive: true }, { isActive: { $exists: false } }]",
+  'Product.find(q)',
+  '$or: [',
+  '{ isActive: true }',
+  '{ isActive: { $exists: false } }',
 ].forEach((token) => assertContains(productsRoute, token, 'routes/products.js'));
 
 [
   'Cache-Control',
   'no-store, no-cache, must-revalidate, proxy-revalidate',
   'sendFile(frontendIndexPath)',
-].forEach((token) => assertContains(server, token, 'server.js'));
+].forEach((token) => assertContains(middleware, token, 'middleware/index.js'));
 
 console.log('Homepage regression checks passed.');

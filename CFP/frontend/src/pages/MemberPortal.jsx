@@ -164,7 +164,7 @@ export default function MemberPortal() {
       showToast(data.message || 'Login failed.');
       return;
     }
-
+      console.log("LOGIN RESPONSE:", data);
     if (data.user?.role !== 'member') {
       showToast('This account is not a member account.');
       return;

@@ -1,13 +1,45 @@
 import React, { useEffect, useState } from 'react';
 import { publicApi } from '../utils/api';
 
+const noticeCardStyle = {
+  background: 'var(--dark2)',
+  borderRadius: '10px',
+  padding: '1.2rem 1.5rem',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '1rem',
+  marginBottom: '0.8rem',
+};
+
 export default function NoticeBoard() {
   const [notices, setNotices] = useState([]);
+  const [apiLoaded, setApiLoaded] = useState(false);
+  const [apiError, setApiError] = useState(false);
 
   useEffect(() => {
-    publicApi('/notices').then(({ ok, data }) => {
-      if (ok && data.notices?.length) setNotices(data.notices);
-    });
+    let cancelled = false;
+
+    async function loadNotices() {
+      const { ok, data } = await publicApi('/notices');
+      if (cancelled) return;
+
+      if (!ok) {
+        setNotices([]);
+        setApiLoaded(true);
+        setApiError(true);
+        return;
+      }
+
+      setNotices(Array.isArray(data.notices) ? data.notices : []);
+      setApiLoaded(true);
+      setApiError(false);
+    }
+
+    loadNotices();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -15,24 +47,32 @@ export default function NoticeBoard() {
       <div className="container">
         <div className="section-header">
           <div className="section-label">LATEST UPDATES</div>
-          <h2 className="section-title">📢 Notice <span className="gold">Board</span></h2>
+          <h2 className="section-title">Notice <span className="gold">Board</span></h2>
         </div>
 
         <div id="noticeBoard" style={{ maxWidth:'800px', margin:'0 auto' }}>
-          {notices.length === 0 ? (
-            <div style={{ background:'var(--dark2)', borderLeft:'4px solid var(--green)', borderRadius:'10px', padding:'1.2rem 1.5rem', display:'flex', alignItems:'center', gap:'1rem', marginBottom:'0.8rem' }}>
-              <div style={{ fontSize:'2rem' }}>✅</div>
+          {!apiLoaded ? (
+            <div style={{ ...noticeCardStyle, borderLeft:'4px solid var(--green)' }}>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:'1.2rem', color:'var(--green)' }}>...</div>
               <div>
-                <div style={{ fontFamily:"'Bebas Neue'", fontSize:'1.1rem', color:'var(--green)' }}>GYM IS OPEN TODAY</div>
-                <div style={{ fontSize:'0.85rem', color:'var(--gray-light)' }}>5:00 AM – 9:00 PM · All facilities available</div>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:'1.1rem', color:'var(--green)' }}>Loading notices</div>
+                <div style={{ fontSize:'0.85rem', color:'var(--gray-light)' }}>Checking the latest gym updates.</div>
+              </div>
+            </div>
+          ) : notices.length === 0 ? (
+            <div style={{ ...noticeCardStyle, borderLeft:'4px solid var(--gold)' }}>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:'1.2rem', color:'var(--gold)' }}>INFO</div>
+              <div>
+                <div style={{ fontFamily:"'Bebas Neue'", fontSize:'1.1rem', color:'var(--gold)' }}>{apiError ? 'Notices unavailable' : 'No notices right now'}</div>
+                <div style={{ fontSize:'0.85rem', color:'var(--gray-light)' }}>{apiError ? 'The backend could not be reached.' : 'Please check back later for gym updates.'}</div>
               </div>
             </div>
           ) : notices.map((n, i) => (
-            <div key={i} style={{ background:'var(--dark2)', borderLeft:`4px solid ${n.color||'var(--gold)'}`, borderRadius:'10px', padding:'1.2rem 1.5rem', display:'flex', alignItems:'center', gap:'1rem', marginBottom:'0.8rem' }}>
-              <div style={{ fontSize:'2rem' }}>{n.emoji || '📢'}</div>
+            <div key={n._id || n.id || i} style={{ ...noticeCardStyle, borderLeft:`4px solid ${n.color||'var(--gold)'}` }}>
+              <div style={{ fontFamily:"'Bebas Neue'", fontSize:'1.2rem', color:n.color||'var(--gold)' }}>{n.emoji || n.icon || 'INFO'}</div>
               <div>
                 <div style={{ fontFamily:"'Bebas Neue'", fontSize:'1.1rem', color:n.color||'var(--gold)' }}>{n.title}</div>
-                <div style={{ fontSize:'0.85rem', color:'var(--gray-light)' }}>{n.message}</div>
+                <div style={{ fontSize:'0.85rem', color:'var(--gray-light)' }}>{n.message || n.content}</div>
               </div>
             </div>
           ))}

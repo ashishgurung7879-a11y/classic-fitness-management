@@ -23,7 +23,7 @@ export default function TrainersPage() {
       <PageHero
         eyebrow="Trainer Team"
         title={<>Work With Coaches Who Know The Floor</>}
-        description="See approved trainers from the MERN backend and book private coaching sessions through the website."
+        description="See approved trainers from the gym API and book private coaching sessions through the website."
         actions={[
           { label: 'Book A Session', variant: 'btn-red', onClick: () => openBooking('Personal Training Session') },
           { label: 'Apply As Trainer', variant: 'btn-outline', onClick: () => navigate('/contact') },

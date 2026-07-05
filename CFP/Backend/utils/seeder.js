@@ -1,7 +1,8 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-const User = require('../models/User');
-const { pool } = require('../db/mysql');
+const bcrypt = require('bcryptjs');
+const { query, pool } = require('../db/mysql');
+const { generatePublicId } = require('../db/helpers');
 
 const adminPassword = process.env.SEED_ADMIN_PASSWORD;
 const trainerPassword = process.env.SEED_TRAINER_PASSWORD;
@@ -35,11 +36,7 @@ const users = [
     trainerProfile: {
       applicationStatus: 'approved',
       experience: 5,
-      specialities: ['Strength Training', 'HIIT & Cardio'],
-      certifications: 'CFP Demo Trainer',
       bio: 'Demo trainer account for local testing.',
-      appliedAt: new Date(),
-      approvedAt: new Date(),
     },
   },
   {
@@ -69,38 +66,90 @@ async function seed() {
     console.log('Connected to MySQL');
 
     for (const userData of users) {
-      let user = await User.findOne({ email: userData.email }).select('+password');
+      const passwordHash = await bcrypt.hash(userData.password, 10);
 
-      if (!user) {
-        user = await User.create(userData);
+      // Check if user already exists by email
+      const existing = await query(
+        'SELECT id, mongo_id FROM users WHERE email = ? LIMIT 1',
+        [userData.email]
+      );
+
+      let userId;
+      let mongoId;
+
+      if (!existing[0]) {
+        // CREATE new user
+        mongoId = generatePublicId();
+        const result = await query(
+          `INSERT INTO users (mongo_id, first_name, last_name, email, phone, password_hash, role, is_active, approval_status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+          [
+            mongoId,
+            userData.firstName,
+            userData.lastName,
+            userData.email,
+            userData.phone,
+            passwordHash,
+            userData.role,
+            userData.isActive ? 1 : 0,
+            userData.approvalStatus || 'approved',
+          ]
+        );
+        userId = result.insertId;
         console.log(`Created ${userData.role}: ${userData.email}`);
-        continue;
+      } else {
+        // UPDATE existing user
+        userId = existing[0].id;
+        mongoId = existing[0].mongo_id;
+        await query(
+          `UPDATE users SET first_name=?, last_name=?, phone=?, password_hash=?, role=?, is_active=1, approval_status=?, updated_at=NOW()
+           WHERE id=?`,
+          [
+            userData.firstName,
+            userData.lastName,
+            userData.phone,
+            passwordHash,
+            userData.role,
+            userData.approvalStatus || 'approved',
+            userId,
+          ]
+        );
+        console.log(`Updated ${userData.role}: ${userData.email}`);
       }
 
-      user.firstName = userData.firstName;
-      user.lastName = userData.lastName;
-      user.phone = userData.phone;
-      user.role = userData.role;
-      user.password = userData.password;
-      user.approvalStatus = userData.approvalStatus || 'approved';
-      user.isActive = true;
-
+      // Upsert membership
       if (userData.membership) {
-        user.membership = {
-          ...user.membership,
-          ...userData.membership,
-        };
+        const m = userData.membership;
+        await query(
+          `INSERT INTO user_memberships (user_id, plan, start_date, end_date, is_active, member_id, shift, due_amount, paid_amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE plan=VALUES(plan), start_date=VALUES(start_date), end_date=VALUES(end_date),
+             is_active=VALUES(is_active), member_id=VALUES(member_id), shift=VALUES(shift),
+             due_amount=VALUES(due_amount), paid_amount=VALUES(paid_amount)`,
+          [
+            userId,
+            m.plan || 'starter',
+            m.startDate || new Date(),
+            m.endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            m.isActive ? 1 : 0,
+            m.memberId || `CFP-${new Date().getFullYear()}-SEED`,
+            m.shift || 'morning',
+            Number(m.dueAmount || 0),
+            Number(m.paidAmount || 0),
+          ]
+        );
       }
 
+      // Upsert trainer profile
       if (userData.trainerProfile) {
-        user.trainerProfile = {
-          ...user.trainerProfile,
-          ...userData.trainerProfile,
-        };
+        const tp = userData.trainerProfile;
+        await query(
+          `INSERT INTO trainer_profiles (user_id, application_status, experience, bio)
+           VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE application_status=VALUES(application_status), experience=VALUES(experience), bio=VALUES(bio)`,
+          [userId, tp.applicationStatus || 'approved', Number(tp.experience || 0), tp.bio || '']
+        );
       }
-
-      await user.save();
-      console.log(`Updated ${userData.role}: ${userData.email}`);
     }
 
     console.log('\n========================================');

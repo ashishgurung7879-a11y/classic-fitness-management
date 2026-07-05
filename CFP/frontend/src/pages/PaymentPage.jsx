@@ -187,7 +187,7 @@ export default function PaymentPage() {
             <img src="/logo.jpg" alt="CFP" style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #cc0000' }} />
             <div>
               <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '2rem', lineHeight: 1 }}>QR Payment Portal</div>
-              <div style={{ color: '#666', fontSize: '0.84rem' }}>React payment proof flow connected to the MERN backend.</div>
+              <div style={{ color: '#666', fontSize: '0.84rem' }}>Payment proof flow connected to the gym API.</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>

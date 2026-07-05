@@ -1,6 +1,7 @@
 const express = require('express');
 const { protect, authorize } = require('../middleware/auth');
-const { PaymentSetting } = require('../models/models');
+const { query, transaction } = require('../db/mysql');
+const { generatePublicId } = require('../db/helpers');
 
 const router = express.Router();
 
@@ -61,12 +62,66 @@ function validateImageUrl(imageUrl) {
   return 'QR image must be an image upload or a direct image URL.';
 }
 
+// ── Load stored methods from payment_settings + payment_setting_methods ────────
+async function loadStoredMethods() {
+  const settingRows = await query(
+    'SELECT id, updated_at FROM payment_settings WHERE setting_key = ? LIMIT 1',
+    [SETTINGS_KEY]
+  );
+
+  if (!settingRows[0]) return { methods: {}, updatedAt: null };
+
+  const methodRows = await query(
+    'SELECT method_key, label, color, helper, image_url, is_active FROM payment_setting_methods WHERE payment_setting_id = ?',
+    [settingRows[0].id]
+  );
+
+  const storedMethods = {};
+  for (const row of methodRows) {
+    storedMethods[row.method_key] = {
+      label: row.label || '',
+      color: row.color || '',
+      helper: row.helper || '',
+      imageUrl: row.image_url || '',
+      isActive: !!row.is_active,
+    };
+  }
+
+  return { methods: storedMethods, updatedAt: settingRows[0].updated_at, settingId: settingRows[0].id };
+}
+
+// ── Persist merged methods ─────────────────────────────────────────────────────
+async function saveSettings(methods, updatedBySqlId = null) {
+  const mongoId = generatePublicId();
+
+  await transaction(async (conn) => {
+    const [settingResult] = await conn.execute(
+      `INSERT INTO payment_settings (mongo_id, setting_key, updated_by, created_at, updated_at)
+       VALUES (?, ?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE updated_by = VALUES(updated_by), updated_at = NOW(), id = LAST_INSERT_ID(id)`,
+      [mongoId, SETTINGS_KEY, updatedBySqlId]
+    );
+
+    const settingId = settingResult.insertId;
+
+    await conn.execute('DELETE FROM payment_setting_methods WHERE payment_setting_id = ?', [settingId]);
+
+    for (const [methodKey, m] of Object.entries(methods)) {
+      await conn.execute(
+        `INSERT INTO payment_setting_methods (payment_setting_id, method_key, label, color, helper, image_url, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [settingId, methodKey, m.label || methodKey, m.color || '', m.helper || '', m.imageUrl || '', m.isActive ? 1 : 0]
+      );
+    }
+  });
+}
+
 async function getSettings() {
-  const document = await PaymentSetting.findOne({ key: SETTINGS_KEY });
+  const { methods: storedMethods, updatedAt } = await loadStoredMethods();
   return {
     success: true,
-    methods: mergeMethods(document?.methods),
-    updatedAt: document?.updatedAt || null,
+    methods: mergeMethods(storedMethods),
+    updatedAt: updatedAt || null,
   };
 }
 
@@ -90,8 +145,8 @@ router.put('/:method', protect, authorize('admin'), async (req, res) => {
       return res.status(400).json({ success: false, message: imageError });
     }
 
-    const current = await PaymentSetting.findOne({ key: SETTINGS_KEY });
-    const methods = mergeMethods(current?.methods);
+    const { methods: storedMethods } = await loadStoredMethods();
+    const methods = mergeMethods(storedMethods);
     const currentMethod = methods[method];
 
     methods[method] = {
@@ -103,11 +158,13 @@ router.put('/:method', protect, authorize('admin'), async (req, res) => {
       isActive: req.body?.isActive === false || req.body?.isActive === 'false' ? false : true,
     };
 
-    await PaymentSetting.findOneAndUpdate(
-      { key: SETTINGS_KEY },
-      { key: SETTINGS_KEY, methods, updatedBy: req.user.id },
-      { upsert: true, new: true, runValidators: true }
+    // Resolve updatedBy SQL id
+    const userRows = await query(
+      'SELECT id FROM users WHERE (mongo_id = ? OR id = ?) LIMIT 1',
+      [String(req.user.id), Number(req.user.id) || 0]
     );
+
+    await saveSettings(methods, userRows[0]?.id || null);
 
     res.json({
       success: true,

@@ -39,22 +39,44 @@ export default function HomePage() {
   const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState(readCart);
   const [stats, setStats] = useState({
-    members: 500,
+    members: 0,
     trainers: 0,
-    years: new Date().getFullYear() - 2019,
+    classes: 0,
   });
+  const [heroGallery, setHeroGallery] = useState([]);
   const { showToast } = useToast();
 
   useEffect(() => {
+    let cancelled = false;
+
     publicApi('/dashboard/public').then(({ ok, data }) => {
+      if (cancelled) return;
       if (ok && data.stats) {
-        setStats({
-          members: data.stats.members ?? 500,
+        setStats((current) => ({
+          ...current,
+          members: data.stats.members ?? 0,
           trainers: data.stats.trainers ?? 0,
-          years: new Date().getFullYear() - 2019,
-        });
+        }));
       }
     });
+
+    publicApi('/classes').then(({ ok, data }) => {
+      if (cancelled || !ok) return;
+      setStats((current) => ({
+        ...current,
+        classes: Array.isArray(data.classes) ? data.classes.length : 0,
+      }));
+    });
+
+    publicApi('/gallery').then(({ ok, data }) => {
+      if (cancelled || !ok) return;
+      const photos = Array.isArray(data.photos) ? data.photos : [];
+      setHeroGallery(photos.slice(0, 3));
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -91,7 +113,7 @@ export default function HomePage() {
       <Navbar />
 
       <main>
-        <HeroSection stats={stats} />
+        <HeroSection stats={stats} galleryPreview={heroGallery} />
         <AboutSection />
         <ClassesSection onBook={openBooking} />
         <BMISection />

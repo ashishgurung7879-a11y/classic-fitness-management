@@ -1,39 +1,25 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { publicApi } from '../utils/api';
 
 const PRODUCT_CACHE_KEY = 'cfp_shop_products_cache';
-
-const DEFAULTS = [
-  { _id: 'p1', name: 'Whey Protein Gold', emoji: 'WP', category: 'protein', description: '2kg • 25g protein/serving', price: 4200, salePrice: 3500, badge: 'best', rating: { avg: 5, count: 124 }, stock: 15 },
-  { _id: 'p2', name: 'Mass Gainer Pro', emoji: 'MG', category: 'protein', description: '3kg • 1200 kcal/serving', price: 5500, salePrice: 4800, badge: 'new', rating: { avg: 4, count: 87 }, stock: 8 },
-  { _id: 'p3', name: 'BCAA Recovery', emoji: 'BC', category: 'vitamins', description: '300g • Tropical flavor', price: 2800, salePrice: 2200, badge: 'hot', rating: { avg: 5, count: 98 }, stock: 20 },
-  { _id: 'p4', name: 'Creatine Monohydrate', emoji: 'CR', category: 'vitamins', description: '500g • Increases strength', price: 1800, salePrice: null, badge: '', rating: { avg: 4, count: 65 }, stock: 12 },
-  { _id: 'p5', name: 'Lifting Gloves Pro', emoji: 'LG', category: 'gear', description: 'Anti-slip • Full wrist support', price: 850, salePrice: null, badge: '', rating: { avg: 5, count: 56 }, stock: 25 },
-  { _id: 'p6', name: 'Resistance Bands Set', emoji: 'RB', category: 'gear', description: '5 levels • Premium latex', price: 1200, salePrice: null, badge: '', rating: { avg: 4, count: 43 }, stock: 18 },
-  { _id: 'p7', name: 'Gym Bag Pro', emoji: 'GB', category: 'gear', description: 'Large • Waterproof', price: 2500, salePrice: 1999, badge: 'sale', rating: { avg: 4, count: 31 }, stock: 6 },
-  { _id: 'p8', name: 'CFP Training Tee', emoji: 'TT', category: 'apparel', description: 'Dri-fit • CFP logo', price: 950, salePrice: null, badge: '', rating: { avg: 4, count: 34 }, stock: 30 },
-];
-
 const CATS = ['all', 'protein', 'vitamins', 'gear', 'apparel', 'drinks', 'other'];
-const stars = (value) => '★'.repeat(Math.floor(value)) + '☆'.repeat(5 - Math.floor(value));
+
+const stars = (value) => '*'.repeat(Math.floor(value)) + '-'.repeat(5 - Math.floor(value));
 const discount = (product) => (product.salePrice ? Math.round((1 - product.salePrice / product.price) * 100) : 0);
 
 function readCachedProducts() {
   try {
     const cached = JSON.parse(localStorage.getItem(PRODUCT_CACHE_KEY) || '[]');
-    const activeCachedProducts = Array.isArray(cached)
+    return Array.isArray(cached)
       ? cached.filter((product) => product?.isActive !== false)
       : [];
-    return activeCachedProducts.length ? activeCachedProducts : DEFAULTS;
   } catch {
-    return DEFAULTS;
+    return [];
   }
 }
 
 export default function ShopSection({ onAddToCart, onOpenCart, cart }) {
-  console.log('SHOPSECTION LOADED');
-
-  const [products, setProducts] = useState(readCachedProducts);
+  const [products, setProducts] = useState([]);
   const [cat, setCat] = useState('all');
   const [search, setSearch] = useState('');
   const [apiLoaded, setApiLoaded] = useState(false);
@@ -43,39 +29,20 @@ export default function ShopSection({ onAddToCart, onOpenCart, cart }) {
     let cancelled = false;
 
     async function loadProducts() {
-  console.log('LOADPRODUCTS STARTED');
-
-  const result = await publicApi('/products');
-
-  console.log('API RESULT:', result);
-
-  const { ok, data, status } = result;
+      console.debug('[ShopSection] requesting public products');
+      const { ok, data, status } = await publicApi('/products');
       if (cancelled) return;
 
       if (!ok) {
+        const cachedProducts = readCachedProducts();
         console.error('[ShopSection] failed to load products', { status, message: data?.message, data });
-        setApiLoaded(false);
+        setProducts(cachedProducts);
+        setApiLoaded(true);
         setApiError(true);
         return;
       }
 
       const fetchedProducts = Array.isArray(data.products) ? data.products : [];
-      console.log('FETCHED PRODUCTS:', fetchedProducts);
-      console.log('FIRST PRODUCT', fetchedProducts[0]);
-
-console.log({
-  name: fetchedProducts[0]?.name,
-  price: fetchedProducts[0]?.price,
-  salePrice: fetchedProducts[0]?.salePrice,
-  category: fetchedProducts[0]?.category,
-  imageUrl: fetchedProducts[0]?.imageUrl?.slice(0, 50),
-  stock: fetchedProducts[0]?.stock,
-  isActive: fetchedProducts[0]?.isActive
-});
-      console.log(
-  'FETCHED PRODUCTS:',
-  JSON.stringify(fetchedProducts, null, 2)
-);
       const visibleProducts = fetchedProducts.filter((product) => product?.isActive !== false);
 
       if (visibleProducts.length !== fetchedProducts.length) {
@@ -99,27 +66,21 @@ console.log({
     }
 
     loadProducts();
-console.log('PRODUCTS STATE', products);
-console.log('FILTERED', filtered);
     return () => {
       cancelled = true;
     };
   }, []);
 
   const filtered = products.filter((product) =>
-  (cat === 'all' || (product?.category || 'other') === cat) &&
-  (
-    String(product?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-    String(product?.description || '').toLowerCase().includes(search.toLowerCase())
-  )
-);
+    (cat === 'all' || (product?.category || 'other') === cat) &&
+    (
+      String(product?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      String(product?.description || '').toLowerCase().includes(search.toLowerCase())
+    )
+  );
 
-console.log('PRODUCTS STATE', products);
-console.log('PRODUCTS LENGTH', products.length);
-console.log('FILTERED', filtered);
-console.log('FILTERED LENGTH', filtered.length);
+  const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
 
-const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
   return (
     <section className="shop" id="shop">
       <div className="container">
@@ -127,7 +88,8 @@ const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
           <div className="section-label">SUPPLEMENT STORE</div>
           <h2 className="section-title">CFP <span className="gold">Shop</span></h2>
           <p>Premium supplements and gear right at the gym</p>
-    </div>
+        </div>
+
         <div className="shop-controls">
           <div className="cat-filters">
             {CATS.map((category) => (
@@ -151,96 +113,73 @@ const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
           </div>
         </div>
 
-        {apiError ? <p className="shop-note">Showing saved shop products. Start the backend to load the latest admin products.</p> : null}
+        {apiError ? (
+          <p className="shop-note">
+            {products.length > 0
+              ? 'Showing previously loaded database products because the backend could not be reached.'
+              : 'Products could not be loaded because the backend could not be reached.'}
+          </p>
+        ) : null}
 
-        
-          <div className="products-grid" id="productsGrid">
+        <div className="products-grid" id="productsGrid">
+          {apiLoaded && products.length === 0 ? (
+            <div className="shop-empty">{apiError ? 'Products are unavailable right now.' : 'No products available.'}</div>
+          ) : filtered.length === 0 ? (
+            <div className="shop-empty">No products found.</div>
+          ) : (
+            filtered.map((product) => {
+              const productName = String(product?.name || 'Untitled product').trim() || 'Untitled product';
+              const price = product.salePrice != null ? product.salePrice : product.price;
+              const off = discount(product);
+              const outOfStock = Number(product.stock ?? 0) <= 0;
 
-  <div style={{ color: 'red', fontSize: '30px' }}>
-    PRODUCTS FOUND: {filtered.length}
-  </div>
-  {apiLoaded && products.length === 0 ? (
-    <div className="shop-empty">
-      No active products are available right now.
-    </div>
-  ) : filtered.length === 0 ? (
-    <div className="shop-empty">
-      No products found.
-    </div>
-  ) : (
-    filtered.map((product) => {
-      const productName =
-        String(product?.name || 'Untitled product').trim() ||
-        'Untitled product';
+              return (
+                <article key={product._id || product.id || productName} className="product-card visible">
+                  <div className="product-img">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={productName} />
+                    ) : (
+                      <div className="prod-emoji">{product.emoji || 'PR'}</div>
+                    )}
 
-      const price =
-        product.salePrice != null
-          ? product.salePrice
-          : product.price;
+                    {product.badge ? (
+                      <span className={`prod-badge ${product.badge}`}>{product.badge.toUpperCase()}</span>
+                    ) : null}
 
-      const off = discount(product);
-      const outOfStock = Number(product.stock ?? 0) <= 0;
+                    {off > 0 ? <span className="prod-disc">{off}% OFF</span> : null}
+                  </div>
 
-      return (
-        <article key={product._id} className="product-card visible">
-          <div className="product-img">
-            {product.imageUrl ? (
-              <img src={product.imageUrl} alt={productName} />
-            ) : (
-              <div className="prod-emoji">{product.emoji || 'PR'}</div>
-            )}
+                  <div className="prod-body">
+                    <div className="prod-cat">{product.category}</div>
+                    <div className="prod-name">{productName}</div>
+                    <div className="prod-desc">{product.description}</div>
 
-            {product.badge ? (
-              <span className={`prod-badge ${product.badge}`}>
-                {product.badge.toUpperCase()}
-              </span>
-            ) : null}
+                    <div className="prod-stars">
+                      {stars(product.rating?.avg || 4)}
+                      <small>({product.rating?.count || 0})</small>
+                    </div>
 
-            {off > 0 ? (
-              <span className="prod-disc">{off}% OFF</span>
-            ) : null}
-          </div>
+                    <div className="prod-price-row">
+                      <span className="price-new">Rs. {Number(price || 0).toLocaleString()}</span>
+                      {product.salePrice ? (
+                        <span className="price-old">Rs. {Number(product.price || 0).toLocaleString()}</span>
+                      ) : null}
+                    </div>
 
-          <div className="prod-body">
-            <div className="prod-cat">{product.category}</div>
-            <div className="prod-name">{productName}</div>
-            <div className="prod-desc">{product.description}</div>
-
-            <div className="prod-stars">
-              {stars(product.rating?.avg || 4)}
-              <small>({product.rating?.count || 0})</small>
-            </div>
-
-            <div className="prod-price-row">
-              <span className="price-new">
-                Rs. {price.toLocaleString()}
-              </span>
-
-              {product.salePrice ? (
-                <span className="price-old">
-                  Rs. {product.price.toLocaleString()}
-                </span>
-              ) : null}
-            </div>
-
-            <button
-              type="button"
-              className="btn-add"
-              disabled={outOfStock}
-              onClick={() =>
-                !outOfStock &&
-                onAddToCart(productName, price, product._id)
-              }
-            >
-              {outOfStock ? 'OUT OF STOCK' : 'ADD TO CART'}
-            </button>
-          </div>
-        </article>
-      );
-    }
-    )
-  )}
-</div>
+                    <button
+                      type="button"
+                      className="btn-add"
+                      disabled={outOfStock}
+                      onClick={() => !outOfStock && onAddToCart(productName, price, product._id || product.id)}
+                    >
+                      {outOfStock ? 'OUT OF STOCK' : 'ADD TO CART'}
+                    </button>
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </div>
       </div>
     </section>
   );

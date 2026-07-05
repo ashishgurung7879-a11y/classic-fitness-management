@@ -1,50 +1,48 @@
-import React from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { publicApi } from '../utils/api';
 
-const PLANS = [
-  {
-    id: 'starter',
-    icon: '🌱',
-    name: 'Starter',
-    sub: 'Perfect for beginners',
-    price: '1,500',
-    amount: 1500,
-    featured: false,
-    features: [
-      { ok: true, text: 'Full Gym Access' },
-      { ok: true, text: '2 Group Classes/Week' },
-      { ok: true, text: 'Locker Room Access' },
-      { ok: true, text: 'Fitness Assessment' },
-      { ok: false, text: 'Personal Trainer Sessions' },
-      { ok: false, text: 'Nutrition Plan' },
-    ],
-    btn: 'btn-outline',
-    label: 'Get Started',
-  },
-  {
-    id: 'pro',
-    icon: '⚡',
-    name: 'Pro',
-    sub: 'For serious athletes',
-    price: '2,000',
-    amount: 2000,
-    featured: true,
-    badge: 'MOST POPULAR',
-    features: [
-      { ok: true, text: 'Full Gym Access' },
-      { ok: true, text: 'Unlimited Group Classes' },
-      { ok: true, text: 'Locker + Towel Service' },
-      { ok: true, text: 'Monthly Assessment' },
-      { ok: true, text: '2 PT Sessions/Month' },
-      { ok: true, text: 'Basic Nutrition Plan' },
-    ],
-    btn: 'btn-red',
-    label: 'Get Pro',
-  },
-];
+function normalizeFeatures(features) {
+  return Array.isArray(features)
+    ? features.map((feature) => (
+      typeof feature === 'string'
+        ? { ok: true, text: feature }
+        : { ok: feature?.ok !== false, text: feature?.text || feature?.label || '' }
+    )).filter((feature) => feature.text)
+    : [];
+}
 
 export default function MembershipSection({ onPay }) {
   const navigate = useNavigate();
+  const [plans, setPlans] = useState([]);
+  const [apiLoaded, setApiLoaded] = useState(false);
+  const [apiError, setApiError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlans() {
+      const { ok, data } = await publicApi('/membership-plans');
+      if (cancelled) return;
+
+      if (!ok) {
+        setPlans([]);
+        setApiLoaded(true);
+        setApiError(true);
+        return;
+      }
+
+      setPlans(Array.isArray(data.plans) ? data.plans.filter((plan) => plan?.isActive !== false) : []);
+      setApiLoaded(true);
+      setApiError(false);
+    }
+
+    loadPlans();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section className="membership" id="membership">
@@ -52,33 +50,50 @@ export default function MembershipSection({ onPay }) {
         <div className="section-header">
           <div className="section-label">PRICING PLANS</div>
           <h2 className="section-title">Choose Your <span className="gold">Membership</span></h2>
-          <p>Two simple plans, no hidden fees.</p>
+          <p>Membership options are managed from the database.</p>
         </div>
 
+        {apiError ? <p className="shop-note">Membership plans could not be loaded because the backend could not be reached.</p> : null}
+
         <div className="plans-grid">
-          {PLANS.map(({ id, icon, name, sub, price, amount, featured, badge, features, btn, label }) => (
-            <div key={id} className={`plan-card${featured ? ' featured-plan' : ''}`}>
-              {badge && <div className="plan-badge">{badge}</div>}
-              <div className="plan-header">
-                <div className="plan-icon">{icon}</div>
-                <h3>{name}</h3>
-                <p>{sub}</p>
-              </div>
-              <div className="plan-price">
-                <span className="currency">Rs.</span>
-                <span className="amount">{price}</span>
-                <span className="period">/month</span>
-              </div>
-              <ul className="plan-features">
-                {features.map(({ ok, text }) => (
-                  <li key={text} className={ok ? '' : 'disabled'}>{ok ? '✓' : '✕'} {text}</li>
-                ))}
-              </ul>
-              <button className={`${btn} btn-full`} onClick={() => onPay(name, amount)}>
-                {label}
-              </button>
+          {apiLoaded && plans.length === 0 ? (
+            <div className="shop-empty" style={{ gridColumn: '1 / -1' }}>
+              {apiError ? 'Membership plans are unavailable right now.' : 'No membership plans available.'}
             </div>
-          ))}
+          ) : plans.map((plan) => {
+            const id = plan._id || plan.id || plan.name;
+            const name = plan.name || 'Membership Plan';
+            const amount = Number(plan.amount ?? plan.price ?? 0);
+            const price = plan.price || Number(amount || 0).toLocaleString();
+            const featured = !!plan.featured;
+            const features = normalizeFeatures(plan.features);
+
+            return (
+              <div key={id} className={`plan-card${featured ? ' featured-plan' : ''}`}>
+                {plan.badge ? <div className="plan-badge">{plan.badge}</div> : null}
+                <div className="plan-header">
+                  <div className="plan-icon">{plan.icon || ''}</div>
+                  <h3>{name}</h3>
+                  <p>{plan.sub || plan.description || ''}</p>
+                </div>
+                <div className="plan-price">
+                  <span className="currency">Rs.</span>
+                  <span className="amount">{price}</span>
+                  <span className="period">{plan.period || '/month'}</span>
+                </div>
+                {features.length > 0 ? (
+                  <ul className="plan-features">
+                    {features.map(({ ok, text }) => (
+                      <li key={text} className={ok ? '' : 'disabled'}>{ok ? 'YES' : 'NO'} {text}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <button className={`${featured ? 'btn-red' : 'btn-outline'} btn-full`} onClick={() => onPay(name, amount)}>
+                  {plan.label || plan.buttonLabel || 'Select Plan'}
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '2rem' }}>
@@ -86,7 +101,7 @@ export default function MembershipSection({ onPay }) {
             Pay via QR code (eSewa / Bank)?
           </p>
           <button className="btn-outline" onClick={() => navigate('/payment')}>
-            Go to QR Payment Page →
+            Go to QR Payment Page
           </button>
         </div>
       </div>

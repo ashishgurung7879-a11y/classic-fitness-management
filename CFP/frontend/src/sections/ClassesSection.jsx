@@ -1,13 +1,41 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { publicApi } from '../utils/api';
 
-const CLASSES = [
-  { tag:'POPULAR', title:'Strength Training', desc:'Build muscle, increase power, and transform your physique.', featured:false, btn:'btn-outline' },
-  { tag:'HOT', title:'HIIT Cardio', desc:'Maximum calorie burn in minimum time with high-intensity intervals.', featured:true, btn:'btn-red' },
-  { tag:'RELAXING', title:'Yoga & Mindfulness', desc:'Balance strength with flexibility. Reduce stress and find peace.', featured:false, btn:'btn-outline' },
-  { tag:'NEW', title:'Zumba Dance', desc:'Dance your way to fitness with our certified instructors.', featured:false, btn:'btn-outline' },
-];
+function displayTag(type) {
+  return String(type || 'class').replace(/[^a-z0-9 ]/gi, '').toUpperCase() || 'CLASS';
+}
 
 export default function ClassesSection({ onBook }) {
+  const [classes, setClasses] = useState([]);
+  const [apiLoaded, setApiLoaded] = useState(false);
+  const [apiError, setApiError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadClasses() {
+      const { ok, data } = await publicApi('/classes');
+      if (cancelled) return;
+
+      if (!ok) {
+        setClasses([]);
+        setApiLoaded(true);
+        setApiError(true);
+        return;
+      }
+
+      setClasses(Array.isArray(data.classes) ? data.classes : []);
+      setApiLoaded(true);
+      setApiError(false);
+    }
+
+    loadClasses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section className="classes" id="classes">
       <div className="container">
@@ -17,31 +45,49 @@ export default function ClassesSection({ onBook }) {
           <p>From beginners to elite athletes, we have a class for every goal.</p>
         </div>
 
+        {apiError ? <p className="shop-note">Classes could not be loaded because the backend could not be reached.</p> : null}
+
         <div className="classes-grid">
-          {CLASSES.map(({ tag, title, desc, featured, btn }) => (
-            <div key={title} className={`class-card${featured ? ' featured' : ''}`}>
-              <div className="class-info">
-                <div className={`class-tag${featured ? ' gold-tag' : ''}`}>{tag}</div>
-                <h3>{title}</h3>
-                <p>{desc}</p>
-                <button className={btn} style={{ fontSize:'0.8rem', padding:'0.5rem 1rem' }}
-                  onClick={() => onBook(title)}>
-                  Book Class
-                </button>
-              </div>
+          {apiLoaded && classes.length === 0 ? (
+            <div className="shop-empty" style={{ gridColumn: '1 / -1' }}>
+              {apiError ? 'Classes are unavailable because the backend could not be reached.' : 'No classes available.'}
             </div>
-          ))}
+          ) : classes.map((item) => {
+            const title = item.name || item.title || 'Training Program';
+            const description = item.description || item.desc || '';
+            const tag = displayTag(item.type || item.tag);
+            const featured = tag === 'HOT';
+
+            return (
+              <div key={item._id || title} className={`class-card${featured ? ' featured' : ''}`}>
+                <div className="class-info">
+                  <div className={`class-tag${featured ? ' gold-tag' : ''}`}>{tag}</div>
+                  <h3>{title}</h3>
+                  <p>{description}</p>
+                  <button className={featured ? 'btn-red' : 'btn-outline'} style={{ fontSize:'0.8rem', padding:'0.5rem 1rem' }}
+                    onClick={() => onBook(title)}>
+                    Book Class
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Ticker */}
-      <div className="ticker-wrap classes-ticker">
-        <div className="ticker">
-          {['STRENGTH TRAINING', 'HIIT CLASSES', 'YOGA AND MEDITATION', 'NUTRITION COACHING', 'STRENGTH TRAINING'].map((t, i) => (
-            <React.Fragment key={i}><span>{t}</span><span className="sep">+</span></React.Fragment>
-          ))}
+      {classes.length > 0 ? (
+        <div className="ticker-wrap classes-ticker">
+          <div className="ticker">
+            {classes.map((item, index) => {
+              const text = String(item.name || item.title || '').trim();
+              if (!text) return null;
+              return (
+                <React.Fragment key={item._id || item.id || `${text}-${index}`}><span>{text.toUpperCase()}</span><span className="sep">+</span></React.Fragment>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }
